@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { PRODUCT_CONFIG } from '../config/productConfig';
-import { Menu, X, ArrowRight, MessageCircle } from 'lucide-react';
+import { Menu, X, ArrowRight, MessageCircle, Lock } from 'lucide-react';
 
 interface NavbarProps {
   onOpenCheckout: () => void;
@@ -39,14 +39,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCheckout, onOpenAdmin, onO
           </nav>
 
           {/* Right Action */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-3">
+            {/* Prominent Admin Login Button */}
             <button
               onClick={onOpenAdmin}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1"
-              title="Admin Orders Panel"
+              className="px-3.5 py-1.5 rounded-full text-xs font-mono font-semibold text-zinc-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 transition-colors flex items-center gap-1.5 shadow-sm"
+              title="Admin Portal (Manage Products & Purchases)"
             >
-              Orders Log
+              <Lock className="w-3.5 h-3.5 text-purple-400" />
+              <span>Admin Login</span>
             </button>
+
+            {/* Get Your Copy CTA */}
             <button
               onClick={onOpenCheckout}
               className="relative group inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold text-white bg-[#6452f6] hover:bg-[#5240eb] transition-all duration-200 shadow-glow active:scale-95"
@@ -57,11 +61,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCheckout, onOpenAdmin, onO
             </button>
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Actions */}
           <div className="flex md:hidden items-center gap-2">
             <button
+              onClick={onOpenAdmin}
+              className="p-2 rounded-lg text-zinc-400 hover:text-white bg-white/5 border border-white/10"
+              title="Admin Login"
+            >
+              <Lock className="w-4 h-4 text-purple-400" />
+            </button>
+            <button
               onClick={onOpenCheckout}
-              className="px-3.5 py-1.5 rounded-full text-xs font-bold text-white bg-[#6452f6] shadow-glow"
+              className="px-3 py-1.5 rounded-full text-xs font-bold text-white bg-[#6452f6] shadow-glow"
             >
               {PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice}
             </button>
@@ -128,6 +139,19 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCheckout, onOpenAdmin, onO
               <span>({PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice})</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+
+            {/* Mobile Admin Login Button */}
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenAdmin();
+              }}
+              className="w-full py-2.5 rounded-full text-center font-bold text-zinc-200 bg-white/[0.06] border border-white/10 hover:bg-white/10 flex items-center justify-center gap-2 text-xs"
+            >
+              <Lock className="w-3.5 h-3.5 text-purple-400" />
+              <span>Admin Login (Manage Products & Orders)</span>
+            </button>
+
             <a
               href={PRODUCT_CONFIG.whatsappLink}
               target="_blank"

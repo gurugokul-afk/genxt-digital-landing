@@ -38,6 +38,9 @@ export function App() {
 
   useEffect(() => {
     fetchActiveProduct();
+    if (window.location.hash === '#admin' || window.location.search.includes('admin=true')) {
+      setIsAdminOpen(true);
+    }
   }, []);
 
   const handleOpenCheckout = () => {
@@ -89,7 +92,10 @@ export function App() {
       </main>
 
       {/* 7. Footer */}
-      <FooterSection onOpenLegal={(type) => setLegalModalType(type)} />
+      <FooterSection
+        onOpenLegal={(type) => setLegalModalType(type)}
+        onOpenAdmin={() => setIsAdminOpen(true)}
+      />
 
       {/* Checkout Modal (Real UPI QR Scanner & 12-digit UTR Verification) */}
       <CheckoutModal

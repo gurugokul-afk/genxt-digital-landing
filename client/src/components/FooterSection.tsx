@@ -1,12 +1,14 @@
 import React from 'react';
 import { PRODUCT_CONFIG } from '../config/productConfig';
 import { Logo } from './Logo';
+import { Lock } from 'lucide-react';
 
 interface FooterSectionProps {
   onOpenLegal: (type: 'terms' | 'privacy') => void;
+  onOpenAdmin: () => void;
 }
 
-export const FooterSection: React.FC<FooterSectionProps> = ({ onOpenLegal }) => {
+export const FooterSection: React.FC<FooterSectionProps> = ({ onOpenLegal, onOpenAdmin }) => {
   return (
     <footer className="py-14 bg-[#050508] border-t border-white/[0.08]">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
@@ -22,7 +24,7 @@ export const FooterSection: React.FC<FooterSectionProps> = ({ onOpenLegal }) => 
           </p>
         </div>
 
-        {/* Footer Links: Home | Contact | Terms of Use | Privacy Policy */}
+        {/* Footer Links: Home | Contact | Terms of Use | Privacy Policy | Admin Login */}
         <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs sm:text-sm text-zinc-400 font-medium">
           <a href="#main" className="hover:text-white transition-colors">Home</a>
           <span className="text-zinc-600">|</span>
@@ -40,6 +42,14 @@ export const FooterSection: React.FC<FooterSectionProps> = ({ onOpenLegal }) => 
             className="hover:text-white transition-colors"
           >
             Privacy Policy
+          </button>
+          <span className="text-zinc-600">|</span>
+          <button
+            onClick={onOpenAdmin}
+            className="hover:text-purple-300 text-purple-400/90 transition-colors flex items-center gap-1 font-mono text-xs"
+          >
+            <Lock className="w-3 h-3" />
+            <span>Admin Login</span>
           </button>
         </div>
 
