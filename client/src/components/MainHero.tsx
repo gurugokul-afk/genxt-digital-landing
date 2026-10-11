@@ -1,6 +1,7 @@
 import React from 'react';
+import { Logo } from './Logo';
 import { PRODUCT_CONFIG } from '../config/productConfig';
-import { ArrowRight, CheckCircle2, ShieldCheck, Zap } from 'lucide-react';
+import { ArrowRight, ArrowDown, CheckCircle2, ShieldCheck, Zap } from 'lucide-react';
 
 interface MainHeroProps {
   onOpenCheckout: () => void;
@@ -15,50 +16,45 @@ export const MainHero: React.FC<MainHeroProps> = ({ onOpenCheckout }) => {
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f1f2e12_1px,transparent_1px),linear-gradient(to_bottom,#1f1f2e12_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] -z-10" />
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        {/* Brand Tagline */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-xs font-mono tracking-[0.25em] text-zinc-300 uppercase mb-8 backdrop-blur-sm">
-          <span className="w-2 h-2 rounded-full bg-[#6452f6] shadow-glow" />
-          <span>{PRODUCT_CONFIG.brandName}</span>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center">
+        {/* Prominent Brand Logo */}
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <Logo size="xl" />
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-xs font-mono tracking-[0.25em] text-zinc-300 uppercase mt-2 backdrop-blur-sm">
+            <span className="w-2 h-2 rounded-full bg-[#6452f6] shadow-glow" />
+            <span>{PRODUCT_CONFIG.brandName}</span>
+          </div>
         </div>
 
-        {/* Main Headline */}
+        {/* Brand Headline */}
         <h1 className="text-4xl sm:text-6xl md:text-7xl font-black uppercase tracking-tight text-white leading-[1.08] mb-6">
-          BUILD A SIDE HUSTLE<br />
+          DISCOVER. BUILD.<br />
           <span className="text-[#8c7dff] bg-clip-text text-transparent bg-gradient-to-r from-white via-[#8c7dff] to-[#6452f6]">
-            BEFORE GRADUATION
+            GROW. EARN.
           </span>
         </h1>
 
-        {/* Subtext */}
+        {/* Brand Description */}
         <div className="max-w-2xl mx-auto space-y-3 mb-10">
           <p className="text-lg sm:text-xl font-medium text-white">
-            {PRODUCT_CONFIG.heroQuestion}
+            The Next Generation Community & Platform for Student Builders.
           </p>
           <p className="text-sm sm:text-base text-zinc-400 font-normal leading-relaxed">
-            {PRODUCT_CONFIG.heroDescription}
+            GENXT empowers ambitious college students and creators to discover untapped problems, build high-leverage digital assets, and establish independent income before graduation.
           </p>
         </div>
 
-        {/* Action Button: Get Your Copy */}
+        {/* Buy Now CTA (Navigates directly to dedicated Product Section) */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-          <button
-            onClick={onOpenCheckout}
+          <a
+            href="#product"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-9 py-4 rounded-full text-base font-bold text-white bg-[#6452f6] hover:bg-[#5240eb] transition-all duration-200 shadow-glow hover:shadow-glow-lg active:scale-95 group"
           >
-            <span>{PRODUCT_CONFIG.heroButtonText}</span>
+            <span>Buy Now</span>
             <span className="px-2.5 py-0.5 rounded-full text-xs bg-white/20 font-semibold">
               {PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice}
             </span>
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1.5 transition-transform" />
-          </button>
-
-          <a
-            href="#product"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full text-sm font-bold text-zinc-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition-colors"
-          >
-            <span>View Guide Details</span>
-            <span>↓</span>
+            <ArrowDown className="w-5 h-5 group-hover:translate-y-1 transition-transform" />
           </a>
         </div>
 

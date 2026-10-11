@@ -33,14 +33,15 @@ export const ProductSection: React.FC<ProductSectionProps> = ({ onOpenCheckout, 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center sm:text-left mb-14">
-          <p className="text-xs font-mono tracking-[0.25em] text-[#8c7dff] uppercase mb-2">
-            SECTION 04
-          </p>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#6452f6]/20 border border-[#6452f6]/40 text-[#8c7dff] text-xs font-mono uppercase mb-3 font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#8c7dff] animate-pulse" />
+            <span>SECTION 04 • EXCLUSIVE PRODUCT SHOWCASE</span>
+          </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-white">
-            The Digital Guide & Resources
+            BUILD A SIDE HUSTLE BEFORE GRADUATION
           </h2>
-          <p className="text-sm text-zinc-400 mt-2">
-            Instant digital access delivered immediately to your email address upon payment verification.
+          <p className="text-sm text-zinc-400 mt-2 max-w-2xl">
+            The complete step-by-step digital blueprint and resource kit. Instant digital access delivered directly to your email upon payment verification.
           </p>
         </div>
 

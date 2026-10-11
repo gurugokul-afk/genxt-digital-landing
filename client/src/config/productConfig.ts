@@ -15,7 +15,7 @@ export const PRODUCT_CONFIG = {
   heroHeadline: "BUILD A SIDE HUSTLE BEFORE GRADUATION",
   heroQuestion: "Want to start a side hustle while you're still in college?",
   heroDescription: "This guide helps students and creators understand how to choose an idea, develop a digital product and plan their first steps.",
-  heroButtonText: "Get Your Copy",
+  heroButtonText: "Buy Now",
 
   // Section 2: What You'll Learn
   whatYouWillLearn: [

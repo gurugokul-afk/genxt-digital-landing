@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCheckout, onOpenAdmin, onO
             <a href="#main" className="hover:text-white transition-colors">Home</a>
             <a href="#learn" className="hover:text-white transition-colors">What You'll Learn</a>
             <a href="#who" className="hover:text-white transition-colors">Who It's For</a>
-            <a href="#product" className="hover:text-white transition-colors">The Guide</a>
+            <a href="#product" className="hover:text-white transition-colors">Product</a>
             <a href="#contact" className="hover:text-white transition-colors">Contact</a>
           </nav>
 
@@ -50,7 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCheckout, onOpenAdmin, onO
               <span>Admin Login</span>
             </button>
 
-            {/* Get Your Copy CTA */}
+            {/* Buy Now CTA */}
             <button
               onClick={onOpenCheckout}
               className="relative group inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold text-white bg-[#6452f6] hover:bg-[#5240eb] transition-all duration-200 shadow-glow active:scale-95"
