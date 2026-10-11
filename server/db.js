@@ -60,6 +60,8 @@ ensureSetting.run('payment_qr_image', config.PRODUCT.qrImageUrl || '/images/paym
 ensureSetting.run('upi_id', config.PRODUCT.upiId || 'suvarnalathasivaramakrishnan07@okhdfcbank');
 ensureSetting.run('payee_name', config.PRODUCT.merchantName || 'Suvarnalatha S');
 ensureSetting.run('upi_uri', config.PRODUCT.upiUri || 'upi://pay?pa=suvarnalathasivaramakrishnan07@okhdfcbank&pn=Suvarnalatha%20S&aid=uGICAgKCTsM-pNQ');
+ensureSetting.run('gmail_user', 'genxtoffcl@gmail.com');
+ensureSetting.run('gmail_app_password', process.env.GMAIL_APP_PASSWORD || '');
 
 // Seed default product if empty
 const countStmt = db.prepare('SELECT COUNT(*) as count FROM products');
@@ -153,6 +155,18 @@ const dbService = {
       WHERE id = ?
     `);
     stmt.run(emailSent ? 1 : 0, emailPreviewUrl, id);
+  },
+
+  deleteOrder: (id) => {
+    const stmt = db.prepare(`DELETE FROM orders WHERE id = ?`);
+    stmt.run(id);
+    return true;
+  },
+
+  updateOrderStatus: (id, status) => {
+    const stmt = db.prepare(`UPDATE orders SET status = ? WHERE id = ?`);
+    stmt.run(status, id);
+    return dbService.getOrderById(id);
   },
 
   // Products CRUD methods
@@ -324,6 +338,29 @@ const dbService = {
     if (payeeName) upsert.run('payee_name', payeeName);
     if (upiUri) upsert.run('upi_uri', upiUri);
     return dbService.getPaymentSettings();
+  },
+
+  // Email Settings Management
+  getEmailSettings: () => {
+    const getVal = (key, fallback) => {
+      const row = db.prepare(`SELECT value FROM admin_settings WHERE key = ?`).get(key);
+      return row ? row.value : fallback;
+    };
+    return {
+      gmailUser: getVal('gmail_user', process.env.GMAIL_USER || 'genxtoffcl@gmail.com'),
+      gmailAppPassword: getVal('gmail_app_password', process.env.GMAIL_APP_PASSWORD || ''),
+    };
+  },
+
+  updateEmailSettings: ({ gmailUser, gmailAppPassword }) => {
+    const upsert = db.prepare(`
+      INSERT INTO admin_settings (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `);
+    if (gmailUser !== undefined) upsert.run('gmail_user', gmailUser.trim());
+    if (gmailAppPassword !== undefined) upsert.run('gmail_app_password', gmailAppPassword.trim());
+    return dbService.getEmailSettings();
   }
 };
 

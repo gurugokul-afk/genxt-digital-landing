@@ -379,20 +379,28 @@ app.post('/api/orders/verify-and-deliver', async (req, res) => {
     // Determine host base URL for email link
     const hostBaseUrl = `${req.protocol}://${req.get('host')}`;
 
-    // Dispatch automated delivery email via Nodemailer
-    const emailResult = await sendOrderDeliveryEmail(newOrder, hostBaseUrl);
-    
-    if (emailResult.success) {
-      db.updateEmailStatus(orderId, 1, emailResult.previewUrl || '');
-      newOrder.emailSent = 1;
-      newOrder.emailPreviewUrl = emailResult.previewUrl || '';
-    }
-
-    return res.status(201).json({
+    // ⚡ 1. RESPOND IMMEDIATELY TO CUSTOMER (< 200ms)
+    // Digital delivery token is included so the success screen & backup download work instantly!
+    res.status(201).json({
       success: true,
       message: 'Payment verified and digital delivery dispatched successfully!',
       order: newOrder,
     });
+
+    // ⚡ 2. Dispatch delivery email asynchronously in background (Non-blocking)
+    sendOrderDeliveryEmail(newOrder, hostBaseUrl)
+      .then((emailResult) => {
+        if (emailResult && emailResult.success) {
+          db.updateEmailStatus(orderId, 1, emailResult.previewUrl || '');
+          console.log(`[Order] Delivery email successfully sent to ${newOrder.email}`);
+        } else {
+          console.warn(`[Order] Delivery email notice for ${newOrder.email}:`, emailResult?.error);
+        }
+      })
+      .catch((err) => {
+        console.error('[Order Email Error]', err.message);
+      });
+
   } catch (error) {
     console.error('[Order Error]', error);
     return res.status(500).json({
@@ -412,6 +420,87 @@ app.get('/api/orders', (req, res) => {
   } catch (error) {
     console.error('[Orders Fetch Error]', error);
     return res.status(500).json({ success: false, message: 'Could not fetch orders' });
+  }
+});
+
+// -------------------------------------------------------------
+// API: Delete Order (Admin Customer Management)
+// -------------------------------------------------------------
+app.delete('/api/orders/:id', verifyAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    db.deleteOrder(id);
+    return res.json({ success: true, message: `Order ${id} deleted successfully.` });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// API: Update Order Status (Admin Customer Management)
+// -------------------------------------------------------------
+app.patch('/api/orders/:id/status', verifyAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'Status is required' });
+    }
+    const updated = db.updateOrderStatus(id, status);
+    return res.json({ success: true, order: updated });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// API: Clear Test Orders (Admin Quick Clean)
+// -------------------------------------------------------------
+app.post('/api/orders/clear-test-orders', verifyAdmin, (req, res) => {
+  try {
+    const all = db.getAllOrders();
+    let deletedCount = 0;
+    const testEmails = [
+      'gurugokul.test@gmail.com',
+      'priya.student@gmail.com',
+      'rahul.test@example.com',
+      'test@test.com'
+    ];
+    for (const ord of all) {
+      if (testEmails.includes(ord.email.toLowerCase()) || ord.fullName.toLowerCase().includes('test')) {
+        db.deleteOrder(ord.id);
+        deletedCount++;
+      }
+    }
+    return res.json({ success: true, message: `Cleared ${deletedCount} test order(s).`, deletedCount });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// API: Email Settings Management (Admin)
+// -------------------------------------------------------------
+app.get('/api/admin/email-settings', verifyAdmin, (req, res) => {
+  try {
+    const settings = db.getEmailSettings();
+    return res.json({ success: true, ...settings });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/admin/email-settings', verifyAdmin, (req, res) => {
+  try {
+    const { gmailUser, gmailAppPassword } = req.body;
+    const updated = db.updateEmailSettings({ gmailUser, gmailAppPassword });
+    return res.json({
+      success: true,
+      message: 'Email credentials updated successfully!',
+      ...updated,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -438,7 +527,7 @@ app.post('/api/orders/:id/resend-email', async (req, res) => {
     } else {
       return res.status(500).json({
         success: false,
-        message: 'Failed to send email: ' + emailResult.error,
+        message: 'Failed to send email: ' + (emailResult.error || 'Check Gmail App Password'),
       });
     }
   } catch (error) {

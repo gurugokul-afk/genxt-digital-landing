@@ -38,6 +38,7 @@ interface OrderRecord {
   productTitle: string;
   emailSent: number;
   emailPreviewUrl?: string;
+  status?: string;
   createdAt: string;
   downloadToken: string;
 }
@@ -93,6 +94,12 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
   const [manualUpiId, setManualUpiId] = useState('');
   const [manualPayeeName, setManualPayeeName] = useState('');
 
+  // Email Settings state
+  const [gmailUser, setGmailUser] = useState('genxtoffcl@gmail.com');
+  const [gmailAppPass, setGmailAppPass] = useState('');
+  const [emailSettingsMsg, setEmailSettingsMsg] = useState('');
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
+
   // Orders state
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -135,6 +142,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
       fetchOrders();
       fetchProducts();
       fetchPaymentConfig();
+      fetchEmailSettings();
     }
   }, [isOpen, isAdminAuthenticated]);
 
@@ -565,6 +573,110 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
     document.body.removeChild(link);
   };
 
+  // Delete Order
+  const handleDeleteOrder = async (orderId: string, customerName: string) => {
+    if (!window.confirm(`Are you sure you want to delete order ${orderId} for "${customerName}"?`)) return;
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Order deleted successfully');
+        fetchOrders();
+      } else {
+        showToast(data.message || 'Failed to delete order');
+      }
+    } catch (err) {
+      showToast('Error deleting order');
+    }
+  };
+
+  // Update Order Status (Confirmed, Pending, Flagged)
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Status updated to ${newStatus}`);
+        fetchOrders();
+      }
+    } catch (err) {
+      showToast('Error updating status');
+    }
+  };
+
+  // Clear Test Orders (Quick Clean)
+  const handleClearTestOrders = async () => {
+    if (!window.confirm('Delete all test orders (Guru Gokul, Priya Builder, Rahul Sharma)? Your real orders will be kept.')) return;
+    try {
+      const res = await fetch('/api/orders/clear-test-orders', {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Test orders cleared!');
+        fetchOrders();
+      }
+    } catch (err) {
+      showToast('Error clearing test orders');
+    }
+  };
+
+  // Fetch Email Credentials
+  const fetchEmailSettings = async () => {
+    try {
+      const res = await fetch('/api/admin/email-settings', {
+        headers: { 'x-admin-token': adminToken }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.gmailUser) setGmailUser(data.gmailUser);
+        if (data.gmailAppPassword) setGmailAppPass(data.gmailAppPassword);
+      }
+    } catch (err) {}
+  };
+
+  // Save Gmail App Password
+  const handleSaveEmailSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingEmail(true);
+    setEmailSettingsMsg('');
+    try {
+      const res = await fetch('/api/admin/email-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          gmailUser: gmailUser.trim(),
+          gmailAppPassword: gmailAppPass.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEmailSettingsMsg('Gmail App Password saved! Automated emails will now be sent from ' + gmailUser);
+        showToast('Email settings saved!');
+      } else {
+        setEmailSettingsMsg(data.message || 'Error saving settings');
+      }
+    } catch (err: any) {
+      setEmailSettingsMsg(err.message || 'Error');
+    } finally {
+      setIsSavingEmail(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -745,13 +857,23 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                 </button>
               )}
               {activeTab === 'orders' && (
-                <button
-                  onClick={handleExportCsv}
-                  className="px-3 py-1.5 rounded-lg text-xs font-mono bg-white/10 hover:bg-white/15 text-zinc-200 flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Export CSV</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleClearTestOrders}
+                    className="px-3 py-1.5 rounded-lg text-xs font-mono bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 flex items-center gap-1.5"
+                    title="Delete sample test orders"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear Test Orders</span>
+                  </button>
+                  <button
+                    onClick={handleExportCsv}
+                    className="px-3 py-1.5 rounded-lg text-xs font-mono bg-white/10 hover:bg-white/15 text-zinc-200 flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export CSV</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1009,9 +1131,28 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                               <span className="text-sm font-black text-emerald-400">
                                 ₹{order.amount}
                               </span>
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                CONFIRMED
-                              </span>
+                              <select
+                                value={order.status || 'CONFIRMED'}
+                                onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border outline-none cursor-pointer ${
+                                  (order.status || 'CONFIRMED') === 'CONFIRMED'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                    : order.status === 'PENDING'
+                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                }`}
+                              >
+                                <option value="CONFIRMED" className="bg-[#0c0c14] text-emerald-400">CONFIRMED</option>
+                                <option value="PENDING" className="bg-[#0c0c14] text-amber-400">PENDING</option>
+                                <option value="FLAGGED" className="bg-[#0c0c14] text-rose-400">FLAGGED</option>
+                              </select>
+                              <button
+                                onClick={() => handleDeleteOrder(order.id, order.fullName)}
+                                className="p-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 transition-colors"
+                                title="Delete Order"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
 
@@ -1072,81 +1213,157 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
             )}
 
             {/* Tab 3: Security & Credentials Update */}
+            {/* Tab 3: Security & Credentials + Email Settings */}
             {activeTab === 'security' && (
-              <div className="flex-1 overflow-y-auto p-6 flex items-center justify-center">
-                <div className="w-full max-w-md rounded-2xl bg-[#0c0c14] border border-white/10 p-6 space-y-5">
-                  <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
-                      <KeyRound className="w-5 h-5" />
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center">
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Card 1: Admin Credentials */}
+                  <div className="rounded-2xl bg-[#0c0c14] border border-white/10 p-6 space-y-5">
+                    <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+                      <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                        <KeyRound className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">Update Admin Email & Password</h4>
+                        <p className="text-[11px] text-zinc-400">
+                          Change your login email or master password anytime.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white">Update Admin Email & Password</h4>
-                      <p className="text-[11px] text-zinc-400">
-                        Change your login email or master password anytime.
-                      </p>
-                    </div>
+
+                    <form onSubmit={handleChangeCredentials} className="space-y-4 text-xs">
+                      <div>
+                        <label className="block text-zinc-300 font-mono mb-1.5">
+                          Current Password <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          placeholder="Enter current password to verify"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white focus:border-[#6452f6] outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-300 font-mono mb-1.5">
+                          New Admin Email (Optional)
+                        </label>
+                        <input
+                          type="email"
+                          value={newAdminEmail}
+                          onChange={(e) => setNewAdminEmail(e.target.value)}
+                          placeholder="Leave blank to keep existing email"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white font-mono focus:border-[#6452f6] outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-300 font-mono mb-1.5">
+                          New Password (Optional)
+                        </label>
+                        <input
+                          type="password"
+                          value={newAdminPassword}
+                          onChange={(e) => setNewAdminPassword(e.target.value)}
+                          placeholder="Leave blank to keep existing password"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white focus:border-[#6452f6] outline-none"
+                        />
+                      </div>
+
+                      {credMessage && (
+                        <p className="text-xs text-emerald-400 font-medium">{credMessage}</p>
+                      )}
+                      {credError && (
+                        <p className="text-xs text-rose-400 font-medium">{credError}</p>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={isUpdatingCreds || !currentPassword}
+                        className={`w-full py-3 rounded-full font-bold uppercase tracking-wider text-white shadow-glow transition-all ${
+                          isUpdatingCreds || !currentPassword
+                            ? 'bg-zinc-700/50 cursor-not-allowed opacity-60'
+                            : 'bg-[#6452f6] hover:bg-[#5240eb] active:scale-95'
+                        }`}
+                      >
+                        {isUpdatingCreds ? 'Updating...' : 'Save New Credentials'}
+                      </button>
+                    </form>
                   </div>
 
-                  <form onSubmit={handleChangeCredentials} className="space-y-4 text-xs">
-                    <div>
-                      <label className="block text-zinc-300 font-mono mb-1.5">
-                        Current Password <span className="text-rose-400">*</span>
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        placeholder="Enter current password to verify"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white focus:border-[#6452f6] outline-none"
-                      />
+                  {/* Card 2: Automated Customer Delivery Email Settings */}
+                  <div className="rounded-2xl bg-[#0c0c14] border border-white/10 p-6 space-y-5">
+                    <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+                      <div className="p-2 rounded-xl bg-purple-500/10 text-[#8c7dff]">
+                        <Mail className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">Automated Delivery Email</h4>
+                        <p className="text-[11px] text-zinc-400">
+                          Send guides directly to customers from genxtoffcl@gmail.com
+                        </p>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-zinc-300 font-mono mb-1.5">
-                        New Admin Email (Optional)
-                      </label>
-                      <input
-                        type="email"
-                        value={newAdminEmail}
-                        onChange={(e) => setNewAdminEmail(e.target.value)}
-                        placeholder="Leave blank to keep existing email"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white font-mono focus:border-[#6452f6] outline-none"
-                      />
-                    </div>
+                    <form onSubmit={handleSaveEmailSettings} className="space-y-4 text-xs">
+                      <div>
+                        <label className="block text-zinc-300 font-mono mb-1.5">
+                          Sender Gmail Address
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          value={gmailUser}
+                          onChange={(e) => setGmailUser(e.target.value)}
+                          placeholder="genxtoffcl@gmail.com"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white font-mono focus:border-[#6452f6] outline-none"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-zinc-300 font-mono mb-1.5">
-                        New Password (Optional)
-                      </label>
-                      <input
-                        type="password"
-                        value={newAdminPassword}
-                        onChange={(e) => setNewAdminPassword(e.target.value)}
-                        placeholder="Leave blank to keep existing password"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white focus:border-[#6452f6] outline-none"
-                      />
-                    </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-zinc-300 font-mono">
+                            Google App Password (16 characters)
+                          </label>
+                          <a
+                            href="https://myaccount.google.com/apppasswords"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-[#8c7dff] hover:underline flex items-center gap-1 font-normal"
+                          >
+                            <span>Get App Password</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                        <input
+                          type="password"
+                          value={gmailAppPass}
+                          onChange={(e) => setGmailAppPass(e.target.value)}
+                          placeholder="e.g. abcd efgh ijkl mnop"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white font-mono focus:border-[#6452f6] outline-none tracking-wider"
+                        />
+                        <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">
+                          🔑 Generated in your Google Account &gt; Security &gt; 2-Step Verification &gt; App Passwords. This allows your website to securely deliver PDF guides directly to buyers' inboxes.
+                        </p>
+                      </div>
 
-                    {credMessage && (
-                      <p className="text-xs text-emerald-400 font-medium">{credMessage}</p>
-                    )}
-                    {credError && (
-                      <p className="text-xs text-rose-400 font-medium">{credError}</p>
-                    )}
+                      {emailSettingsMsg && (
+                        <p className="text-xs text-emerald-400 font-medium">{emailSettingsMsg}</p>
+                      )}
 
-                    <button
-                      type="submit"
-                      disabled={isUpdatingCreds || !currentPassword}
-                      className={`w-full py-3 rounded-full font-bold uppercase tracking-wider text-white shadow-glow transition-all ${
-                        isUpdatingCreds || !currentPassword
-                          ? 'bg-zinc-700/50 cursor-not-allowed opacity-60'
-                          : 'bg-[#6452f6] hover:bg-[#5240eb] active:scale-95'
-                      }`}
-                    >
-                      {isUpdatingCreds ? 'Updating...' : 'Save New Credentials'}
-                    </button>
-                  </form>
+                      <button
+                        type="submit"
+                        disabled={isSavingEmail}
+                        className="w-full py-3 rounded-full font-bold uppercase tracking-wider text-white bg-purple-600 hover:bg-purple-500 active:scale-95 shadow-glow transition-all"
+                      >
+                        {isSavingEmail ? 'Saving...' : 'Save Email Password'}
+                      </button>
+                    </form>
+                  </div>
+
                 </div>
               </div>
             )}

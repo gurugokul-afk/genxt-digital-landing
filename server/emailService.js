@@ -1,15 +1,43 @@
 const nodemailer = require('nodemailer');
 const config = require('./config');
+const db = require('./db');
 
-let transporter = null;
+let cachedTransporter = null;
+let lastUsedPass = null;
+let lastUsedUser = null;
 let isEthereal = false;
 
 async function getTransporter() {
-  if (transporter) return transporter;
+  const emailSettings = db.getEmailSettings();
+  const gmailUser = emailSettings.gmailUser || process.env.GMAIL_USER || 'genxtoffcl@gmail.com';
+  const gmailPass = emailSettings.gmailAppPassword || process.env.GMAIL_APP_PASSWORD || '';
 
-  // If live SMTP credentials are provided
+  // If password/user unchanged and transporter exists, reuse
+  if (cachedTransporter && lastUsedPass === gmailPass && lastUsedUser === gmailUser) {
+    return cachedTransporter;
+  }
+
+  // 1. If Gmail App Password is provided
+  if (gmailUser && gmailPass) {
+    cachedTransporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: gmailUser,
+        pass: gmailPass,
+      },
+      connectionTimeout: 8000,
+      greetingTimeout: 5000,
+    });
+    lastUsedPass = gmailPass;
+    lastUsedUser = gmailUser;
+    isEthereal = false;
+    console.log(`[Email Service] Configured live Gmail SMTP for: ${gmailUser}`);
+    return cachedTransporter;
+  }
+
+  // 2. If live custom SMTP credentials are provided
   if (config.SMTP.host && config.SMTP.user && config.SMTP.pass) {
-    transporter = nodemailer.createTransport({
+    cachedTransporter = nodemailer.createTransport({
       host: config.SMTP.host,
       port: config.SMTP.port,
       secure: config.SMTP.secure,
@@ -17,41 +45,39 @@ async function getTransporter() {
         user: config.SMTP.user,
         pass: config.SMTP.pass,
       },
+      connectionTimeout: 8000,
+      greetingTimeout: 5000,
     });
+    lastUsedPass = config.SMTP.pass;
+    lastUsedUser = config.SMTP.user;
     isEthereal = false;
     console.log(`[Email Service] Configured live SMTP transport: ${config.SMTP.host}`);
-    return transporter;
+    return cachedTransporter;
   }
 
-  // If Gmail shortcut credentials are provided in .env
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
+  // 3. Fallback: Quick test account via Ethereal with 5s timeout guard
+  try {
+    const testAccount = await Promise.race([
+      nodemailer.createTestAccount(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Ethereal setup timed out')), 5000))
+    ]);
+    cachedTransporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: testAccount.user,
+        pass: testAccount.pass,
       },
+      connectionTimeout: 5000,
     });
-    isEthereal = false;
-    console.log(`[Email Service] Configured Gmail SMTP for ${process.env.GMAIL_USER}`);
-    return transporter;
+    isEthereal = true;
+    console.log(`[Email Service] Test inbox ready: ${testAccount.user}`);
+    return cachedTransporter;
+  } catch (err) {
+    console.warn('[Email Service] Notice: Live SMTP password not configured yet. Configure Gmail App Password in Admin.');
+    return null;
   }
-
-  // Fallback: Test account via Ethereal for zero-friction testing
-  console.log('[Email Service] Using Ethereal test inbox for instant fulfillment preview...');
-  const testAccount = await nodemailer.createTestAccount();
-  transporter = nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    secure: false,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
-  isEthereal = true;
-  console.log(`[Email Service] Test inbox ready: ${testAccount.user}`);
-  return transporter;
 }
 
 /**
@@ -282,11 +308,19 @@ function generateAdminAlertHtml(order) {
 async function sendOrderDeliveryEmail(order, hostBaseUrl = 'http://localhost:5000') {
   try {
     const mailer = await getTransporter();
+    if (!mailer) {
+      console.warn(`[Email Service] Could not send email to ${order.email}: Gmail App Password not configured.`);
+      return { success: false, error: 'Gmail App Password not configured. Set it in Admin -> Email Settings.' };
+    }
+
+    const emailSettings = db.getEmailSettings();
+    const senderEmail = emailSettings.gmailUser || 'genxtoffcl@gmail.com';
+    const fromHeader = `"GENXT Digital Guides" <${senderEmail}>`;
     const downloadUrl = config.PRODUCT.externalDownloadUrl || `${hostBaseUrl}/api/download/${order.downloadToken}`;
 
     // 1. Send customer fulfillment email
     const customerMailOptions = {
-      from: config.SMTP.from,
+      from: fromHeader,
       to: order.email,
       subject: `⚡ [Your Copy] ${order.productTitle} (Order #${order.id})`,
       text: `Hi ${order.fullName},\n\nThank you for purchasing ${order.productTitle}! Your payment of ₹${order.amount} (UTR: ${order.utrNumber}) has been verified.\n\nDownload your guide here: ${downloadUrl}\n\nSupport: ${config.SUPPORT.email}`,

@@ -24,9 +24,9 @@ module.exports = {
     host: process.env.SMTP_HOST || "",
     port: Number(process.env.SMTP_PORT) || 587,
     secure: process.env.SMTP_SECURE === "true",
-    user: process.env.SMTP_USER || "",
-    pass: process.env.SMTP_PASS || "",
-    from: process.env.SMTP_FROM || '"GENXT Digital Guides" <suvarnalathasivaramakrishnan@gmail.com>',
+    user: process.env.GMAIL_USER || process.env.SMTP_USER || "genxtoffcl@gmail.com",
+    pass: process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || "",
+    from: process.env.SMTP_FROM || '"GENXT Digital Guides" <genxtoffcl@gmail.com>',
   },
 
   // 💬 Support Contact
