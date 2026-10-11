@@ -15,7 +15,10 @@ import {
   Layers,
   ShoppingBag,
   ExternalLink,
-  KeyRound
+  KeyRound,
+  QrCode,
+  UploadCloud,
+  Smartphone
 } from 'lucide-react';
 import { PRODUCT_CONFIG } from '../config/productConfig';
 
@@ -63,8 +66,8 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Active Tab: 'products' | 'orders' | 'security'
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'security'>('products');
+  // Active Tab: 'products' | 'orders' | 'security' | 'payment'
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'security' | 'payment'>('products');
 
   // Change credentials form state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -73,6 +76,22 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
   const [isUpdatingCreds, setIsUpdatingCreds] = useState(false);
   const [credMessage, setCredMessage] = useState('');
   const [credError, setCredError] = useState('');
+
+  // Payment & QR Settings state
+  const [paymentSettings, setPaymentSettings] = useState({
+    qrImageUrl: '/images/payment_qr.jpg',
+    upiId: '',
+    payeeName: '',
+    upiUri: '',
+  });
+  const [loadingPayment, setLoadingPayment] = useState(false);
+  const [selectedQrFile, setSelectedQrFile] = useState<File | null>(null);
+  const [qrFilePreview, setQrFilePreview] = useState<string | null>(null);
+  const [isUploadingQr, setIsUploadingQr] = useState(false);
+  const [paymentMsg, setPaymentMsg] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const [manualUpiId, setManualUpiId] = useState('');
+  const [manualPayeeName, setManualPayeeName] = useState('');
 
   // Orders state
   const [orders, setOrders] = useState<OrderRecord[]>([]);
@@ -115,6 +134,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
     if (isOpen && isAdminAuthenticated) {
       fetchOrders();
       fetchProducts();
+      fetchPaymentConfig();
     }
   }, [isOpen, isAdminAuthenticated]);
 
@@ -207,6 +227,123 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
       setCredError(err.message || 'Error updating credentials.');
     } finally {
       setIsUpdatingCreds(false);
+    }
+  };
+
+  // Fetch Payment Configuration
+  const fetchPaymentConfig = async () => {
+    setLoadingPayment(true);
+    try {
+      const res = await fetch('/api/payment-config');
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentSettings({
+          qrImageUrl: data.qrImageUrl || '/images/payment_qr.jpg',
+          upiId: data.upiId || '',
+          payeeName: data.payeeName || '',
+          upiUri: data.upiUri || '',
+        });
+        setManualUpiId(data.upiId || '');
+        setManualPayeeName(data.payeeName || '');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingPayment(false);
+    }
+  };
+
+  // Handle selecting new QR Code image file
+  const handleSelectQrImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedQrFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setQrFilePreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload and activate new QR Code image
+  const handleUploadNewQr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qrFilePreview) return;
+    setIsUploadingQr(true);
+    setPaymentMsg('');
+    setPaymentError('');
+
+    try {
+      const res = await fetch('/api/admin/upload-qr', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          base64Data: qrFilePreview,
+          fileName: selectedQrFile?.name || 'payment_qr.jpg',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to upload QR code.');
+      }
+
+      setPaymentSettings({
+        qrImageUrl: data.payment.qrImageUrl,
+        upiId: data.payment.upiId,
+        payeeName: data.payment.payeeName,
+        upiUri: data.payment.upiUri,
+      });
+      setManualUpiId(data.payment.upiId);
+      setManualPayeeName(data.payment.payeeName);
+      setSelectedQrFile(null);
+      setQrFilePreview(null);
+      setPaymentMsg('Payment QR Code updated and activated successfully!');
+      showToast('Payment QR Code updated!');
+      if (onProductChanged) onProductChanged();
+    } catch (err: any) {
+      setPaymentError(err.message || 'Error updating QR code');
+    } finally {
+      setIsUploadingQr(false);
+    }
+  };
+
+  // Save manual UPI details
+  const handleSaveManualPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUploadingQr(true);
+    setPaymentMsg('');
+    setPaymentError('');
+
+    try {
+      const res = await fetch('/api/admin/update-payment-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          upiId: manualUpiId.trim(),
+          payeeName: manualPayeeName.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to update payment info.');
+      }
+
+      setPaymentSettings(data.payment);
+      setPaymentMsg('Payment account details updated successfully!');
+      showToast('Payment details saved!');
+    } catch (err: any) {
+      setPaymentError(err.message || 'Error saving payment details.');
+    } finally {
+      setIsUploadingQr(false);
     }
   };
 
@@ -580,6 +717,21 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                 >
                   <KeyRound className="w-4 h-4 text-amber-400" />
                   <span>Security & Password</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('payment');
+                    fetchPaymentConfig();
+                  }}
+                  className={`py-3.5 border-b-2 font-bold flex items-center gap-2 ${
+                    activeTab === 'payment'
+                      ? 'border-[#6452f6] text-white'
+                      : 'border-transparent text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <QrCode className="w-4 h-4 text-cyan-400" />
+                  <span>Payment & QR</span>
                 </button>
               </div>
 
@@ -995,6 +1147,176 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                       {isUpdatingCreds ? 'Updating...' : 'Save New Credentials'}
                     </button>
                   </form>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 4: Payment & QR Code Management */}
+            {activeTab === 'payment' && (
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center">
+                <div className="w-full max-w-2xl space-y-6">
+                  
+                  {/* Top Header Card */}
+                  <div className="rounded-2xl bg-[#0c0c14] border border-white/10 p-6 flex items-center justify-between">
+                    <div className="flex items-center gap-3.5">
+                      <div className="p-3 rounded-2xl bg-cyan-500/10 text-cyan-400">
+                        <QrCode className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-bold text-white">Payment & QR Code Gateway</h4>
+                        <p className="text-xs text-zinc-400">
+                          Update the real UPI QR code scanned by customers during checkout.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      LIVE ON LANDING PAGE
+                    </span>
+                  </div>
+
+                  {/* Grid: Current Active QR & Upload New QR */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left: Active QR Code */}
+                    <div className="rounded-2xl bg-[#0c0c14] border border-white/10 p-6 flex flex-col items-center text-center space-y-4">
+                      <span className="text-xs font-mono uppercase text-zinc-400 tracking-wider">
+                        Current Active QR Code
+                      </span>
+                      <div className="p-3 rounded-2xl bg-white shadow-xl flex items-center justify-center">
+                        <img
+                          src={paymentSettings.qrImageUrl}
+                          alt="Active Payment QR"
+                          className="w-48 h-48 object-contain rounded-lg"
+                        />
+                      </div>
+                      <div className="w-full bg-[#14141f] rounded-xl p-3 text-left space-y-1 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500 font-mono">Merchant:</span>
+                          <span className="text-zinc-200 font-bold">{paymentSettings.payeeName || 'Suvarnalatha S'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500 font-mono">UPI ID:</span>
+                          <span className="text-cyan-400 font-mono font-bold text-[11px] truncate max-w-[180px]">
+                            {paymentSettings.upiId || 'Not Set'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Upload New QR Code Image */}
+                    <div className="rounded-2xl bg-[#0c0c14] border border-white/10 p-6 flex flex-col justify-between space-y-4">
+                      <div>
+                        <h5 className="text-xs font-mono uppercase text-zinc-300 tracking-wider mb-2 flex items-center gap-2">
+                          <UploadCloud className="w-4 h-4 text-cyan-400" />
+                          <span>Upload New QR Code</span>
+                        </h5>
+                        <p className="text-xs text-zinc-400 mb-4">
+                          Select a new screenshot or image of your Google Pay, PhonePe, or Paytm QR code.
+                        </p>
+
+                        {/* File Picker */}
+                        <label className="block cursor-pointer">
+                          <div className="border-2 border-dashed border-white/15 hover:border-cyan-400/50 rounded-2xl p-4 text-center transition-colors bg-[#111119]">
+                            {qrFilePreview ? (
+                              <div className="space-y-2">
+                                <img
+                                  src={qrFilePreview}
+                                  alt="Preview"
+                                  className="w-28 h-28 object-contain mx-auto rounded-lg bg-white p-1"
+                                />
+                                <span className="text-xs text-cyan-300 font-mono block truncate">
+                                  {selectedQrFile?.name || 'Selected QR Image'}
+                                </span>
+                                <span className="text-[10px] text-zinc-500">Click to change</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-2 py-4">
+                                <UploadCloud className="w-8 h-8 text-zinc-500 mx-auto" />
+                                <span className="text-xs text-zinc-300 font-bold block">
+                                  Click to browse QR Image
+                                </span>
+                                <span className="text-[11px] text-zinc-500 block">
+                                  Supports JPG, PNG, WEBP
+                                </span>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleSelectQrImage}
+                              className="hidden"
+                            />
+                          </div>
+                        </label>
+                      </div>
+
+                      <button
+                        onClick={handleUploadNewQr}
+                        disabled={isUploadingQr || !qrFilePreview}
+                        className={`w-full py-3 rounded-full text-xs font-bold uppercase tracking-wider text-white transition-all ${
+                          isUploadingQr || !qrFilePreview
+                            ? 'bg-zinc-700/50 cursor-not-allowed opacity-60'
+                            : 'bg-cyan-600 hover:bg-cyan-500 shadow-glow active:scale-95'
+                        }`}
+                      >
+                        {isUploadingQr ? 'Uploading & Activating...' : 'Activate This QR Code'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Manual Account Details Card */}
+                  <div className="rounded-2xl bg-[#0c0c14] border border-white/10 p-6 space-y-4">
+                    <h5 className="text-xs font-mono uppercase text-zinc-300 tracking-wider">
+                      Merchant Account Information
+                    </h5>
+
+                    <form onSubmit={handleSaveManualPayment} className="space-y-4 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-zinc-400 font-mono mb-1.5">
+                            Payee / Merchant Name
+                          </label>
+                          <input
+                            type="text"
+                            value={manualPayeeName}
+                            onChange={(e) => setManualPayeeName(e.target.value)}
+                            placeholder="e.g. Suvarnalatha S"
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white focus:border-cyan-400 outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-400 font-mono mb-1.5">
+                            UPI ID (VPA)
+                          </label>
+                          <input
+                            type="text"
+                            value={manualUpiId}
+                            onChange={(e) => setManualUpiId(e.target.value)}
+                            placeholder="e.g. suvarnalathasivaramakrishnan07@okhdfcbank"
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white font-mono focus:border-cyan-400 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {paymentMsg && (
+                        <p className="text-xs text-emerald-400 font-medium">{paymentMsg}</p>
+                      )}
+                      {paymentError && (
+                        <p className="text-xs text-rose-400 font-medium">{paymentError}</p>
+                      )}
+
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={isUploadingQr}
+                          className="px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-white/10 hover:bg-white/15 transition-all"
+                        >
+                          Save Account Details
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
                 </div>
               </div>
             )}

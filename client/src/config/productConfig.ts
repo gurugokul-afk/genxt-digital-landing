@@ -52,8 +52,10 @@ export const PRODUCT_CONFIG = {
   ],
 
   // Payment Setup (Real UPI Direct Gateway)
-  upiId: "genxtdigital@okhdfcbank", // Set to your Google Pay / PhonePe UPI ID to receive payments directly
-  merchantName: "GENXT Builders",
+  upiId: "suvarnalathasivaramakrishnan07@okhdfcbank",
+  merchantName: "Suvarnalatha S",
+  paymentQrImage: "/images/payment_qr.jpg",
+  upiUri: "upi://pay?pa=suvarnalathasivaramakrishnan07@okhdfcbank&pn=Suvarnalatha%20S&aid=uGICAgKCTsM-pNQ",
   paymentNote: "Side Hustle Guide Access",
 
   // Digital Delivery

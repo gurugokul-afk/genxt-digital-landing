@@ -1,13 +1,10 @@
-import React, { useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import React, { useState, useEffect } from 'react';
 import { PRODUCT_CONFIG } from '../config/productConfig';
 import { UtrHelperModal } from './UtrHelperModal';
 import {
   X,
   ArrowRight,
   ArrowLeft,
-  Check,
-  Copy,
   HelpCircle,
   AlertCircle,
   Smartphone,
@@ -35,9 +32,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   const [emailError, setEmailError] = useState('');
   const [nameError, setNameError] = useState('');
   const [utrError, setUtrError] = useState('');
-  const [copiedUpi, setCopiedUpi] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showUtrHelper, setShowUtrHelper] = useState(false);
+
+  // Dynamic payment config state
+  const [paymentConfig, setPaymentConfig] = useState({
+    qrImageUrl: PRODUCT_CONFIG.paymentQrImage || '/images/payment_qr.jpg',
+    merchantName: PRODUCT_CONFIG.merchantName,
+    upiId: PRODUCT_CONFIG.upiId,
+    upiUri: PRODUCT_CONFIG.upiUri,
+  });
+
+  useEffect(() => {
+    fetch('/api/payment-config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setPaymentConfig({
+            qrImageUrl: data.qrImageUrl || PRODUCT_CONFIG.paymentQrImage || '/images/payment_qr.jpg',
+            merchantName: data.payeeName || PRODUCT_CONFIG.merchantName,
+            upiId: data.upiId || PRODUCT_CONFIG.upiId,
+            upiUri: data.upiUri || PRODUCT_CONFIG.upiUri,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   if (!isOpen) return null;
 
@@ -48,18 +68,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   };
 
   // UPI payment intent URI
-  const upiUri = `upi://pay?pa=${encodeURIComponent(PRODUCT_CONFIG.upiId)}&pn=${encodeURIComponent(
-    PRODUCT_CONFIG.merchantName
+  const effectiveUpiUri = paymentConfig.upiUri || `upi://pay?pa=${encodeURIComponent(paymentConfig.upiId)}&pn=${encodeURIComponent(
+    paymentConfig.merchantName
   )}&am=${encodeURIComponent(PRODUCT_CONFIG.actualPrice.toString())}&cu=INR&tn=${encodeURIComponent(
     PRODUCT_CONFIG.paymentNote
   )}`;
-
-  // Copy UPI ID to clipboard
-  const handleCopyUpi = () => {
-    navigator.clipboard.writeText(PRODUCT_CONFIG.upiId);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2500);
-  };
 
   // Step 1 Validation
   const handleProceedToPayment = (e: React.FormEvent) => {
@@ -323,65 +336,35 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                 {/* QR Code Container */}
                 <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-[#08080d] border border-white/10 relative">
                   <div className="flex items-center justify-between w-full mb-3 text-xs font-mono">
-                    <span className="text-zinc-400 font-semibold">MERCHANT: {PRODUCT_CONFIG.merchantName}</span>
+                    <span className="text-zinc-400 font-semibold">MERCHANT: {paymentConfig.merchantName}</span>
                     <span className="text-emerald-400 font-bold">AMOUNT: {PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice}</span>
                   </div>
 
-                  {/* Dynamic QR Code Display */}
-                  <div className="p-4 rounded-2xl bg-white shadow-xl relative group">
-                    <QRCodeSVG
-                      value={upiUri}
-                      size={200}
-                      level="H"
-                      includeMargin={false}
-                      fgColor="#050508"
-                      bgColor="#ffffff"
+                  {/* Real QR Code Image Display */}
+                  <div className="p-3 rounded-2xl bg-white shadow-2xl relative flex items-center justify-center">
+                    <img
+                      src={paymentConfig.qrImageUrl}
+                      alt="Official Payment QR Code"
+                      className="w-56 h-56 object-contain rounded-xl"
                     />
                   </div>
 
                   {/* UPI Apps supported tag */}
                   <div className="mt-4 flex items-center gap-2 text-xs font-medium text-zinc-400">
                     <Smartphone className="w-4 h-4 text-[#8c7dff]" />
-                    <span>Scan with Google Pay, PhonePe, Paytm, or BHIM</span>
+                    <span>Scan with Google Pay, PhonePe, Paytm, or any UPI App</span>
                   </div>
 
                   {/* Mobile Direct Pay Button */}
                   <div className="w-full mt-4">
                     <a
-                      href={upiUri}
+                      href={effectiveUpiUri}
                       className="w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
                     >
                       <Smartphone className="w-4 h-4" />
-                      <span>Pay via GPay / PhonePe App (Mobile Users)</span>
+                      <span>Pay via UPI App (GPay / PhonePe / Paytm)</span>
                     </a>
                   </div>
-                </div>
-
-                {/* Copy UPI ID Row */}
-                <div className="rounded-xl bg-white/[0.03] border border-white/5 p-3.5 flex items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-zinc-400 block">UPI ID / VPA</span>
-                    <span className="text-sm font-mono font-bold text-white selection:bg-[#6452f6]">
-                      {PRODUCT_CONFIG.upiId}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyUpi}
-                    className="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-white/10 hover:bg-white/20 text-zinc-200 transition-colors flex items-center gap-1.5 shrink-0"
-                  >
-                    {copiedUpi ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy UPI</span>
-                      </>
-                    )}
-                  </button>
                 </div>
 
                 {/* 3 Step Instructions */}

@@ -8,8 +8,10 @@ module.exports = {
   PRODUCT: {
     title: process.env.PRODUCT_TITLE || "BUILD A SIDE HUSTLE BEFORE GRADUATION",
     price: Number(process.env.PRODUCT_PRICE) || 499,
-    upiId: process.env.UPI_ID || "genxtdigital@okhdfcbank",
-    merchantName: process.env.MERCHANT_NAME || "GENXT Builders",
+    upiId: process.env.UPI_ID || "suvarnalathasivaramakrishnan07@okhdfcbank",
+    merchantName: process.env.MERCHANT_NAME || "Suvarnalatha S",
+    qrImageUrl: process.env.QR_IMAGE_URL || "/images/payment_qr.jpg",
+    upiUri: process.env.UPI_URI || "upi://pay?pa=suvarnalathasivaramakrishnan07@okhdfcbank&pn=Suvarnalatha%20S&aid=uGICAgKCTsM-pNQ",
     fileName: process.env.PRODUCT_FILE_NAME || "Build_A_Side_Hustle_Before_Graduation_GENXT.pdf",
     externalDownloadUrl: process.env.EXTERNAL_DOWNLOAD_URL || "",
   },

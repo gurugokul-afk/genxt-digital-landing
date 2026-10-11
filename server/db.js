@@ -47,14 +47,19 @@ db.exec(`
   )
 `);
 
-// Seed default settings if empty
-const settingsCountStmt = db.prepare(`SELECT COUNT(*) as count FROM admin_settings`);
-if (settingsCountStmt.get().count === 0) {
-  const insertSetting = db.prepare(`INSERT INTO admin_settings (key, value) VALUES (?, ?)`);
-  insertSetting.run('admin_email', config.ADMIN_EMAIL);
-  insertSetting.run('admin_password', 'genxt2026');
-  console.log('[Database] Seeded initial admin credentials');
-}
+// Seed default settings if empty or missing
+const ensureSetting = db.prepare(`
+  INSERT INTO admin_settings (key, value)
+  VALUES (?, ?)
+  ON CONFLICT(key) DO NOTHING
+`);
+
+ensureSetting.run('admin_email', config.ADMIN_EMAIL);
+ensureSetting.run('admin_password', 'genxt2026');
+ensureSetting.run('payment_qr_image', config.PRODUCT.qrImageUrl || '/images/payment_qr.jpg');
+ensureSetting.run('upi_id', config.PRODUCT.upiId || 'suvarnalathasivaramakrishnan07@okhdfcbank');
+ensureSetting.run('payee_name', config.PRODUCT.merchantName || 'Suvarnalatha S');
+ensureSetting.run('upi_uri', config.PRODUCT.upiUri || 'upi://pay?pa=suvarnalathasivaramakrishnan07@okhdfcbank&pn=Suvarnalatha%20S&aid=uGICAgKCTsM-pNQ');
 
 // Seed default product if empty
 const countStmt = db.prepare('SELECT COUNT(*) as count FROM products');
@@ -292,6 +297,33 @@ const dbService = {
       stmt.run(newPassword, newPassword);
     }
     return dbService.getAdminSettings();
+  },
+
+  // Payment & QR Code Settings Management
+  getPaymentSettings: () => {
+    const getVal = (key, fallback) => {
+      const row = db.prepare(`SELECT value FROM admin_settings WHERE key = ?`).get(key);
+      return row ? row.value : fallback;
+    };
+    return {
+      qrImageUrl: getVal('payment_qr_image', config.PRODUCT.qrImageUrl || '/images/payment_qr.jpg'),
+      upiId: getVal('upi_id', config.PRODUCT.upiId || 'suvarnalathasivaramakrishnan07@okhdfcbank'),
+      payeeName: getVal('payee_name', config.PRODUCT.merchantName || 'Suvarnalatha S'),
+      upiUri: getVal('upi_uri', config.PRODUCT.upiUri || 'upi://pay?pa=suvarnalathasivaramakrishnan07@okhdfcbank&pn=Suvarnalatha%20S&aid=uGICAgKCTsM-pNQ'),
+    };
+  },
+
+  updatePaymentSettings: ({ qrImageUrl, upiId, payeeName, upiUri }) => {
+    const upsert = db.prepare(`
+      INSERT INTO admin_settings (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `);
+    if (qrImageUrl) upsert.run('payment_qr_image', qrImageUrl);
+    if (upiId) upsert.run('upi_id', upiId);
+    if (payeeName) upsert.run('payee_name', payeeName);
+    if (upiUri) upsert.run('upi_uri', upiUri);
+    return dbService.getPaymentSettings();
   }
 };
 

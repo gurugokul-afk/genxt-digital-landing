@@ -13,10 +13,15 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '15mb' })); // Support base64 image uploads if needed
 
-// Ensure downloads directory exists
+// Ensure downloads and uploads directory exist
 if (!fs.existsSync(config.DOWNLOADS_DIR)) {
   fs.mkdirSync(config.DOWNLOADS_DIR, { recursive: true });
 }
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Admin Auth Helper (Token based)
 let currentAdminToken = crypto.createHash('sha256').update(Date.now() + '-genxt-session').digest('hex');
@@ -94,6 +99,121 @@ app.post('/api/admin/change-credentials', verifyAdmin, (req, res) => {
       adminEmail: updated.email,
     });
   } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// API: Payment & QR Code Management
+// -------------------------------------------------------------
+// 1. Get active payment config (Public)
+app.get('/api/payment-config', (req, res) => {
+  try {
+    const payment = db.getPaymentSettings();
+    return res.json({
+      success: true,
+      ...payment,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 2. Update payment details (Admin)
+app.post('/api/admin/update-payment-config', verifyAdmin, (req, res) => {
+  try {
+    const { qrImageUrl, upiId, payeeName, upiUri } = req.body;
+    const updated = db.updatePaymentSettings({
+      qrImageUrl: qrImageUrl ? qrImageUrl.trim() : undefined,
+      upiId: upiId ? upiId.trim() : undefined,
+      payeeName: payeeName ? payeeName.trim() : undefined,
+      upiUri: upiUri ? upiUri.trim() : undefined,
+    });
+    return res.json({
+      success: true,
+      message: 'Payment configuration updated successfully!',
+      payment: updated,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 3. Upload new Payment QR code image (Admin)
+app.post('/api/admin/upload-qr', verifyAdmin, (req, res) => {
+  try {
+    const { base64Data, fileName } = req.body;
+    if (!base64Data) {
+      return res.status(400).json({ success: false, message: 'No image data provided.' });
+    }
+
+    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    const buffer = matches ? Buffer.from(matches[2], 'base64') : Buffer.from(base64Data, 'base64');
+
+    const ext = fileName && path.extname(fileName) ? path.extname(fileName) : '.jpg';
+    const savedName = `qr_${Date.now()}${ext}`;
+    const uploadPath = path.join(UPLOADS_DIR, savedName);
+    fs.writeFileSync(uploadPath, buffer);
+
+    // Also overwrite payment_qr.jpg so default route always works
+    fs.writeFileSync(path.join(UPLOADS_DIR, 'payment_qr.jpg'), buffer);
+
+    const clientPublicImg = path.join(__dirname, '../client/public/images');
+    if (fs.existsSync(clientPublicImg)) {
+      try {
+        fs.writeFileSync(path.join(clientPublicImg, 'payment_qr.jpg'), buffer);
+      } catch (e) {
+        console.warn('Could not sync to client public:', e.message);
+      }
+    }
+
+    const qrImageUrl = `/uploads/${savedName}`;
+    let detectedUpiId = null;
+    let detectedPayee = null;
+    let detectedUri = null;
+
+    // Try decoding the QR code
+    try {
+      let rawImageData = null;
+      if (ext.toLowerCase() === '.jpg' || ext.toLowerCase() === '.jpeg') {
+        const jpeg = require('jpeg-js');
+        rawImageData = jpeg.decode(buffer, { useTArray: true });
+      }
+      if (rawImageData) {
+        const jsQR = require('jsqr');
+        const code = jsQR(rawImageData.data, rawImageData.width, rawImageData.height);
+        if (code && code.data) {
+          detectedUri = code.data;
+          if (detectedUri.startsWith('upi://pay')) {
+            const parsedUrl = new URL(detectedUri);
+            detectedUpiId = parsedUrl.searchParams.get('pa') || null;
+            detectedPayee = parsedUrl.searchParams.get('pn') || null;
+          }
+        }
+      }
+    } catch (decodeErr) {
+      console.warn('QR auto-decode notice:', decodeErr.message);
+    }
+
+    const updated = db.updatePaymentSettings({
+      qrImageUrl,
+      upiId: detectedUpiId || undefined,
+      payeeName: detectedPayee || undefined,
+      upiUri: detectedUri || undefined,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Payment QR code uploaded and activated successfully!',
+      payment: updated,
+      detected: {
+        upiId: detectedUpiId,
+        payeeName: detectedPayee,
+        upiUri: detectedUri,
+      }
+    });
+  } catch (err) {
+    console.error(err);
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -371,10 +491,13 @@ app.get('/api/download/:token', (req, res) => {
 // -------------------------------------------------------------
 app.get('/api/config', (req, res) => {
   const active = db.getActiveProduct();
+  const payment = db.getPaymentSettings();
   return res.json({
     success: true,
-    upiId: config.PRODUCT.upiId,
-    merchantName: config.PRODUCT.merchantName,
+    upiId: payment.upiId,
+    merchantName: payment.payeeName,
+    qrImageUrl: payment.qrImageUrl,
+    upiUri: payment.upiUri,
     price: active ? active.price : config.PRODUCT.price,
     productTitle: active ? active.name : config.PRODUCT.title,
     coverImage: active ? active.coverImage : '/images/product_cover.jpg',
