@@ -51,6 +51,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
     merchantName: PRODUCT_CONFIG.merchantName,
     upiId: PRODUCT_CONFIG.upiId,
     upiUri: PRODUCT_CONFIG.upiUri,
+    razorpayEnabled: false,
+    razorpayKeyId: '',
   });
 
   useEffect(() => {
@@ -63,6 +65,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
             merchantName: data.payeeName || PRODUCT_CONFIG.merchantName,
             upiId: data.upiId || PRODUCT_CONFIG.upiId,
             upiUri: data.upiUri || PRODUCT_CONFIG.upiUri,
+            razorpayEnabled: Boolean(data.razorpayEnabled),
+            razorpayKeyId: data.razorpayKeyId || '',
           });
         }
       })
@@ -84,6 +88,92 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
     PRODUCT_CONFIG.paymentNote
   )}`;
 
+  // Handle Pay via Razorpay (Instant Automated Verification)
+  const handlePayWithRazorpay = async () => {
+    setIsSubmitting(true);
+    try {
+      // 1. Create Razorpay order on backend
+      const res = await fetch('/api/razorpay/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: price,
+          productTitle: productName,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to initiate payment gateway.');
+      }
+
+      // 2. Open Razorpay Checkout Modal
+      const options = {
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency,
+        name: PRODUCT_CONFIG.brandName,
+        description: productName,
+        image: '/images/product_cover.jpg',
+        order_id: data.orderId,
+        prefill: {
+          name: fullName.trim(),
+          email: email.trim(),
+          contact: phone.trim(),
+        },
+        theme: {
+          color: '#6452f6',
+        },
+        handler: async (response: any) => {
+          setIsSubmitting(true);
+          try {
+            // 3. Cryptographically verify signature on backend
+            const verifyRes = await fetch('/api/razorpay/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                fullName: fullName.trim(),
+                email: email.trim().toLowerCase(),
+                phone: phone.trim(),
+                amount: price,
+                productTitle: productName,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+            if (verifyRes.ok && verifyData.success) {
+              onSuccess(verifyData.order);
+            } else {
+              alert(verifyData.message || 'Payment verification failed. Please contact support.');
+            }
+          } catch (err: any) {
+            alert('Error verifying payment: ' + err.message);
+          } finally {
+            setIsSubmitting(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsSubmitting(false);
+          },
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', (resp: any) => {
+        alert('Payment failed: ' + (resp.error?.description || 'Transaction declined'));
+        setIsSubmitting(false);
+      });
+      rzp.open();
+    } catch (err: any) {
+      alert(err.message || 'Could not connect to payment gateway.');
+      setIsSubmitting(false);
+    }
+  };
+
   // Step 1 Validation
   const handleProceedToPayment = (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,7 +194,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
     }
 
     if (!hasError) {
-      setStep(2);
+      if (paymentConfig.razorpayEnabled && (window as any).Razorpay) {
+        handlePayWithRazorpay();
+      } else {
+        setStep(2);
+      }
     }
   };
 
@@ -323,11 +417,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                 <div className="pt-3">
                   <button
                     type="submit"
-                    className="w-full py-4 rounded-full text-sm font-bold uppercase tracking-wider text-white bg-[#6452f6] hover:bg-[#5240eb] shadow-glow transition-all active:scale-95 flex items-center justify-center gap-2 group"
+                    disabled={isSubmitting}
+                    className="w-full py-4 rounded-full text-sm font-bold uppercase tracking-wider text-white bg-[#6452f6] hover:bg-[#5240eb] shadow-glow transition-all active:scale-95 flex items-center justify-center gap-2 group disabled:opacity-60"
                   >
-                    <span>Proceed to UPI Payment ({PRODUCT_CONFIG.currencySymbol}{price})</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Initializing Secure Gateway...</span>
+                      </>
+                    ) : paymentConfig.razorpayEnabled ? (
+                      <>
+                        <span>Pay via Razorpay ({PRODUCT_CONFIG.currencySymbol}{price})</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    ) : (
+                      <>
+                        <span>Proceed to UPI Payment ({PRODUCT_CONFIG.currencySymbol}{price})</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </button>
+                  {paymentConfig.razorpayEnabled && (
+                    <div className="flex items-center justify-center gap-2 mt-3 text-[11px] font-mono text-zinc-400">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Instant 1-Click Delivery • GPay, PhonePe, Cards, UPI</span>
+                    </div>
+                  )}
                 </div>
               </form>
             ) : (

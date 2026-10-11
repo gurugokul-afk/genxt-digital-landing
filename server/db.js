@@ -62,6 +62,9 @@ ensureSetting.run('payee_name', config.PRODUCT.merchantName || 'Suvarnalatha S')
 ensureSetting.run('upi_uri', config.PRODUCT.upiUri || 'upi://pay?pa=suvarnalathasivaramakrishnan07@okhdfcbank&pn=Suvarnalatha%20S&aid=uGICAgKCTsM-pNQ');
 ensureSetting.run('gmail_user', 'genxtoffcl@gmail.com');
 ensureSetting.run('gmail_app_password', process.env.GMAIL_APP_PASSWORD || '');
+ensureSetting.run('razorpay_enabled', '0');
+ensureSetting.run('razorpay_key_id', process.env.RAZORPAY_KEY_ID || '');
+ensureSetting.run('razorpay_key_secret', process.env.RAZORPAY_KEY_SECRET || '');
 
 // Seed default product if empty
 const countStmt = db.prepare('SELECT COUNT(*) as count FROM products');
@@ -361,6 +364,31 @@ const dbService = {
     if (gmailUser !== undefined) upsert.run('gmail_user', gmailUser.trim());
     if (gmailAppPassword !== undefined) upsert.run('gmail_app_password', gmailAppPassword.trim());
     return dbService.getEmailSettings();
+  },
+
+  // Razorpay Gateway Settings
+  getRazorpaySettings: () => {
+    const getVal = (key, fallback) => {
+      const row = db.prepare(`SELECT value FROM admin_settings WHERE key = ?`).get(key);
+      return row ? row.value : fallback;
+    };
+    return {
+      enabled: getVal('razorpay_enabled', '0') === '1',
+      keyId: getVal('razorpay_key_id', process.env.RAZORPAY_KEY_ID || ''),
+      keySecret: getVal('razorpay_key_secret', process.env.RAZORPAY_KEY_SECRET || ''),
+    };
+  },
+
+  updateRazorpaySettings: ({ enabled, keyId, keySecret }) => {
+    const upsert = db.prepare(`
+      INSERT INTO admin_settings (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `);
+    if (enabled !== undefined) upsert.run('razorpay_enabled', enabled ? '1' : '0');
+    if (keyId !== undefined) upsert.run('razorpay_key_id', keyId.trim());
+    if (keySecret !== undefined) upsert.run('razorpay_key_secret', keySecret.trim());
+    return dbService.getRazorpaySettings();
   }
 };
 

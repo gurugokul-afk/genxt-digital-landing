@@ -18,7 +18,9 @@ import {
   KeyRound,
   QrCode,
   UploadCloud,
-  Smartphone
+  Smartphone,
+  Zap,
+  ShieldCheck
 } from 'lucide-react';
 import { PRODUCT_CONFIG } from '../config/productConfig';
 
@@ -100,6 +102,14 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
   const [emailSettingsMsg, setEmailSettingsMsg] = useState('');
   const [isSavingEmail, setIsSavingEmail] = useState(false);
 
+  // Razorpay Gateway state
+  const [razorpayEnabled, setRazorpayEnabled] = useState(false);
+  const [razorpayKeyId, setRazorpayKeyId] = useState('');
+  const [razorpayKeySecret, setRazorpayKeySecret] = useState('');
+  const [hasKeySecret, setHasKeySecret] = useState(false);
+  const [isSavingRazorpay, setIsSavingRazorpay] = useState(false);
+  const [razorpayMsg, setRazorpayMsg] = useState('');
+
   // Orders state
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -143,6 +153,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
       fetchProducts();
       fetchPaymentConfig();
       fetchEmailSettings();
+      fetchRazorpaySettings();
     }
   }, [isOpen, isAdminAuthenticated]);
 
@@ -714,6 +725,56 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
       setEmailSettingsMsg(err.message || 'Error');
     } finally {
       setIsSavingEmail(false);
+    }
+  };
+
+  // Fetch Razorpay Settings
+  const fetchRazorpaySettings = async () => {
+    try {
+      const res = await fetch('/api/admin/razorpay-settings', {
+        headers: { 'x-admin-token': adminToken },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRazorpayEnabled(Boolean(data.enabled));
+        setRazorpayKeyId(data.keyId || '');
+        setHasKeySecret(Boolean(data.hasKeySecret));
+        if (data.keySecret) setRazorpayKeySecret(data.keySecret);
+      }
+    } catch (err) {}
+  };
+
+  // Save Razorpay Settings
+  const handleSaveRazorpaySettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingRazorpay(true);
+    setRazorpayMsg('');
+    try {
+      const res = await fetch('/api/admin/razorpay-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          enabled: razorpayEnabled,
+          keyId: razorpayKeyId.trim(),
+          keySecret: razorpayKeySecret.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRazorpayMsg('Razorpay settings saved successfully!');
+        showToast('Razorpay settings saved!');
+        fetchRazorpaySettings();
+        fetchPaymentConfig();
+      } else {
+        showToast(data.message || 'Error saving Razorpay settings');
+      }
+    } catch (err) {
+      showToast('Error saving Razorpay settings');
+    } finally {
+      setIsSavingRazorpay(false);
     }
   };
 
@@ -1442,7 +1503,107 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
               <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center">
                 <div className="w-full max-w-2xl space-y-6">
                   
-                  {/* Top Header Card */}
+                  {/* Card 1: Razorpay Automated Gateway */}
+                  <div className="rounded-2xl bg-[#0c0c14] border-2 border-[#6452f6]/40 p-6 space-y-5 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#6452f6]/10 rounded-full blur-2xl pointer-events-none" />
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-[#6452f6]/20 text-[#8c7dff]">
+                          <Zap className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-base font-bold text-white">Razorpay Payment Gateway</h4>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#6452f6]/20 text-[#8c7dff] border border-[#6452f6]/40">
+                              RECOMMENDED
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-400 mt-0.5">
+                            Locks price, eliminates fraud, and delivers PDF automatically 24/7.
+                          </p>
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2.5 cursor-pointer self-start sm:self-auto bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
+                        <input
+                          type="checkbox"
+                          checked={razorpayEnabled}
+                          onChange={(e) => setRazorpayEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-[#6452f6] rounded cursor-pointer"
+                        />
+                        <span className="text-xs font-mono font-bold text-zinc-200">
+                          {razorpayEnabled ? 'GATEWAY ENABLED' : 'GATEWAY DISABLED'}
+                        </span>
+                      </label>
+                    </div>
+
+                    <form onSubmit={handleSaveRazorpaySettings} className="space-y-4 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Key ID Field */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-zinc-300 font-mono">
+                              Razorpay Key ID <span className="text-rose-400">*</span>
+                            </label>
+                            <a
+                              href="https://dashboard.razorpay.com/app/keys"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-[#8c7dff] hover:underline flex items-center gap-1 font-normal"
+                            >
+                              <span>Get Keys</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          </div>
+                          <input
+                            type="text"
+                            required={razorpayEnabled}
+                            value={razorpayKeyId}
+                            onChange={(e) => setRazorpayKeyId(e.target.value)}
+                            placeholder="rzp_live_... or rzp_test_..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white font-mono focus:border-[#6452f6] outline-none"
+                          />
+                        </div>
+
+                        {/* Key Secret Field */}
+                        <div>
+                          <label className="block text-zinc-300 font-mono mb-1.5">
+                            Razorpay Key Secret <span className="text-rose-400">*</span>
+                          </label>
+                          <input
+                            type="password"
+                            required={razorpayEnabled && !hasKeySecret}
+                            value={razorpayKeySecret}
+                            onChange={(e) => setRazorpayKeySecret(e.target.value)}
+                            placeholder={hasKeySecret ? '•••••••••••••••• (Saved)' : 'Enter Key Secret'}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white font-mono focus:border-[#6452f6] outline-none tracking-wider"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-[#141420] border border-white/5 p-3 text-[11px] text-zinc-400 flex items-start gap-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Fraud Protection:</strong> When Razorpay is enabled, checkout locks the exact price. No customer can pay ₹1 or submit a fake UTR. Verified transactions are delivered automatically.
+                        </div>
+                      </div>
+
+                      {razorpayMsg && (
+                        <p className="text-xs text-emerald-400 font-medium">{razorpayMsg}</p>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={isSavingRazorpay}
+                        className="w-full py-3 rounded-full font-bold uppercase tracking-wider text-white bg-[#6452f6] hover:bg-[#5240eb] active:scale-95 shadow-glow transition-all"
+                      >
+                        {isSavingRazorpay ? 'Saving Gateway Settings...' : 'Save Razorpay Configuration'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Card 2: Manual UPI QR Header Card */}
                   <div className="rounded-2xl bg-[#0c0c14] border border-white/10 p-6 flex items-center justify-between">
                     <div className="flex items-center gap-3.5">
                       <div className="p-3 rounded-2xl bg-cyan-500/10 text-cyan-400">

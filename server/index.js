@@ -6,6 +6,12 @@ const crypto = require('crypto');
 const config = require('./config');
 const db = require('./db');
 const { sendOrderDeliveryEmail } = require('./emailService');
+let Razorpay;
+try {
+  Razorpay = require('razorpay');
+} catch (e) {
+  console.warn('Razorpay package not loaded:', e.message);
+}
 
 const app = express();
 
@@ -110,12 +116,198 @@ app.post('/api/admin/change-credentials', verifyAdmin, (req, res) => {
 app.get('/api/payment-config', (req, res) => {
   try {
     const payment = db.getPaymentSettings();
+    const rzp = db.getRazorpaySettings();
     return res.json({
       success: true,
       ...payment,
+      razorpayEnabled: rzp.enabled && !!rzp.keyId && !!rzp.keySecret,
+      razorpayKeyId: rzp.enabled ? rzp.keyId : undefined,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 1b. Get Razorpay Settings (Admin Only)
+app.get('/api/admin/razorpay-settings', verifyAdmin, (req, res) => {
+  try {
+    const rzp = db.getRazorpaySettings();
+    return res.json({
+      success: true,
+      enabled: rzp.enabled,
+      keyId: rzp.keyId,
+      keySecret: rzp.keySecret ? '••••••••••••••••' : '',
+      hasKeySecret: !!rzp.keySecret,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 1c. Update Razorpay Settings (Admin Only)
+app.post('/api/admin/razorpay-settings', verifyAdmin, (req, res) => {
+  try {
+    const { enabled, keyId, keySecret } = req.body;
+    const updated = db.updateRazorpaySettings({
+      enabled: enabled !== undefined ? Boolean(enabled) : undefined,
+      keyId: keyId !== undefined ? keyId.trim() : undefined,
+      keySecret: (keySecret && !keySecret.includes('••••')) ? keySecret.trim() : undefined,
+    });
+    return res.json({
+      success: true,
+      message: 'Razorpay configuration updated successfully!',
+      settings: {
+        enabled: updated.enabled,
+        keyId: updated.keyId,
+        hasKeySecret: !!updated.keySecret,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 1d. Razorpay Create Order (Public/Checkout)
+app.post('/api/razorpay/create-order', async (req, res) => {
+  try {
+    const rzpSettings = db.getRazorpaySettings();
+    if (!rzpSettings.enabled || !rzpSettings.keyId || !rzpSettings.keySecret) {
+      return res.status(400).json({ success: false, message: 'Razorpay gateway is not configured or disabled.' });
+    }
+
+    if (!Razorpay) {
+      return res.status(500).json({ success: false, message: 'Razorpay SDK is not initialized on server.' });
+    }
+
+    const { amount, productTitle } = req.body;
+    const activeProduct = db.getActiveProduct();
+    const finalAmount = Number(amount) || (activeProduct ? activeProduct.price : config.PRODUCT.price);
+    const finalTitle = productTitle || (activeProduct ? activeProduct.name : config.PRODUCT.title);
+
+    const instance = new Razorpay({
+      key_id: rzpSettings.keyId,
+      key_secret: rzpSettings.keySecret,
+    });
+
+    const receipt = `genxt_rcpt_${Date.now().toString(36)}`;
+    const options = {
+      amount: Math.round(finalAmount * 100), // in paise
+      currency: 'INR',
+      receipt,
+      notes: {
+        product: finalTitle,
+      },
+    };
+
+    const order = await instance.orders.create(options);
+
+    return res.json({
+      success: true,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: rzpSettings.keyId,
+      productTitle: finalTitle,
+    });
+  } catch (err) {
+    console.error('[Razorpay Order Create Error]', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Could not initiate Razorpay order.',
+    });
+  }
+});
+
+// 1e. Razorpay Verify Payment & Deliver (Public/Checkout)
+app.post('/api/razorpay/verify-payment', async (req, res) => {
+  try {
+    const rzpSettings = db.getRazorpaySettings();
+    if (!rzpSettings.keySecret) {
+      return res.status(400).json({ success: false, message: 'Razorpay secret key not found.' });
+    }
+
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      fullName,
+      email,
+      phone,
+      amount,
+      productTitle,
+    } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Missing payment signature verification data.' });
+    }
+
+    // Cryptographically verify signature using HMAC SHA256
+    const bodyData = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', rzpSettings.keySecret)
+      .update(bodyData)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      console.warn(`[Razorpay Fraud Detected] Invalid signature for payment ${razorpay_payment_id}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Payment verification failed. Invalid cryptographic signature.',
+      });
+    }
+
+    // Determine product title & amount
+    const activeProduct = db.getActiveProduct();
+    const finalAmount = Number(amount) || (activeProduct ? activeProduct.price : config.PRODUCT.price);
+    const finalTitle = productTitle || (activeProduct ? activeProduct.name : config.PRODUCT.title);
+
+    // Create confirmed order
+    const orderId = `GENXT-RZP-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const downloadToken = crypto.randomBytes(16).toString('hex');
+    const orderCreatedAt = new Date().toISOString();
+
+    const newOrder = {
+      id: orderId,
+      fullName: (fullName || 'Customer').trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone ? phone.trim() : '',
+      utrNumber: razorpay_payment_id, // Store Razorpay Payment ID as payment proof
+      amount: finalAmount,
+      productTitle: finalTitle,
+      status: 'CONFIRMED', // Instant Confirmed since Razorpay verified bank credit!
+      downloadToken,
+      emailSent: 0,
+      emailPreviewUrl: '',
+      createdAt: orderCreatedAt,
+    };
+
+    db.createOrder(newOrder);
+    console.log(`[Razorpay] Payment verified! Order created: ${orderId} for ${newOrder.email} (${razorpay_payment_id})`);
+
+    const hostBaseUrl = `${req.protocol}://${req.get('host')}`;
+
+    // Respond immediately with confirmed order and download token
+    res.status(201).json({
+      success: true,
+      message: 'Payment verified and confirmed by Razorpay!',
+      order: newOrder,
+    });
+
+    // Send delivery email with the PDF in background
+    sendOrderDeliveryEmail(newOrder, hostBaseUrl)
+      .then((emailResult) => {
+        if (emailResult && emailResult.success) {
+          db.updateEmailStatus(orderId, 1, emailResult.previewUrl || '');
+          console.log(`[Order] Delivery email sent to ${newOrder.email}`);
+        }
+      })
+      .catch((err) => {
+        console.error('[Order Email Error]', err.message);
+      });
+
+  } catch (err) {
+    console.error('[Razorpay Verify Error]', err);
+    return res.status(500).json({ success: false, message: err.message || 'Payment verification failed.' });
   }
 });
 
