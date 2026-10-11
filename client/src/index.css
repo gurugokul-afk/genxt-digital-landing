@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #050508;
+    color: #f3f4f6;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    overflow-x: hidden;
+  }
+}
+
+/* Custom background ambient glow */
+.bg-radial-gradient {
+  background: radial-gradient(circle at 50% 10%, rgba(100, 82, 246, 0.18) 0%, rgba(5, 5, 8, 0) 70%);
+}
+
+.bg-radial-subtle {
+  background: radial-gradient(circle at 50% 50%, rgba(120, 98, 255, 0.08) 0%, rgba(5, 5, 8, 0) 65%);
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050508;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f1f2e;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6452f6;
+}
+
+/* Smooth glass effect */
+.glass-panel {
+  background: rgba(14, 14, 19, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.glass-card {
+  background: rgba(16, 16, 22, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(120, 98, 255, 0.35);
+  box-shadow: 0 10px 30px -10px rgba(100, 82, 246, 0.2);
+  transform: translateY(-2px);
+}

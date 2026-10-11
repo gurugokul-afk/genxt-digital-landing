@@ -1,0 +1,17 @@
+{
+  "name": "genxt-digital-server",
+  "version": "1.0.0",
+  "description": "High-converting digital product checkout backend with UPI verification and automated email delivery",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "nodemailer": "^6.9.16"
+  }
+}

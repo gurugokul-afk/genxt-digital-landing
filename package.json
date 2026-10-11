@@ -1,0 +1,23 @@
+{
+  "name": "genxt-digital-landing-project",
+  "version": "1.0.0",
+  "description": "Production High-Converting Single Page Landing Page with UPI Payment & Automated Nodemailer Delivery",
+  "main": "server/index.js",
+  "scripts": {
+    "install:all": "npm --prefix client install && npm --prefix server install",
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install",
+    "start": "node server/index.js"
+  },
+  "keywords": [
+    "landing-page",
+    "upi",
+    "gpay",
+    "digital-products",
+    "react",
+    "tailwind",
+    "nodemailer",
+    "sqlite"
+  ],
+  "author": "GENXT",
+  "license": "ISC"
+}
