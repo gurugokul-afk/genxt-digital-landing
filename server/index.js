@@ -365,7 +365,7 @@ app.post('/api/orders/verify-and-deliver', async (req, res) => {
       utrNumber: cleanUtr,
       amount: finalAmount,
       productTitle: finalTitle,
-      status: 'CONFIRMED',
+      status: 'PENDING',
       downloadToken,
       emailSent: 0,
       emailPreviewUrl: '',
@@ -374,32 +374,19 @@ app.post('/api/orders/verify-and-deliver', async (req, res) => {
 
     // Save order in SQLite database
     db.createOrder(newOrder);
-    console.log(`[Order] Created new order: ${orderId} for ${newOrder.email} (UTR: ${cleanUtr})`);
+    console.log(`[Order] New order pending verification: ${orderId} for ${newOrder.email} (UTR: ${cleanUtr})`);
 
-    // Determine host base URL for email link
-    const hostBaseUrl = `${req.protocol}://${req.get('host')}`;
-
-    // ⚡ 1. RESPOND IMMEDIATELY TO CUSTOMER (< 200ms)
-    // Digital delivery token is included so the success screen & backup download work instantly!
-    res.status(201).json({
+    // ⚡ Respond to customer that payment was received for verification
+    // Download token is kept private until admin verifies receipt of full amount
+    return res.status(201).json({
       success: true,
-      message: 'Payment verified and digital delivery dispatched successfully!',
-      order: newOrder,
+      isPending: true,
+      message: 'Payment details submitted successfully! Your order is being verified against our bank records. Digital access will be dispatched to your email once confirmed.',
+      order: {
+        ...newOrder,
+        downloadToken: '', // Keep concealed until approved
+      },
     });
-
-    // ⚡ 2. Dispatch delivery email asynchronously in background (Non-blocking)
-    sendOrderDeliveryEmail(newOrder, hostBaseUrl)
-      .then((emailResult) => {
-        if (emailResult && emailResult.success) {
-          db.updateEmailStatus(orderId, 1, emailResult.previewUrl || '');
-          console.log(`[Order] Delivery email successfully sent to ${newOrder.email}`);
-        } else {
-          console.warn(`[Order] Delivery email notice for ${newOrder.email}:`, emailResult?.error);
-        }
-      })
-      .catch((err) => {
-        console.error('[Order Email Error]', err.message);
-      });
 
   } catch (error) {
     console.error('[Order Error]', error);
@@ -537,6 +524,54 @@ app.post('/api/orders/:id/resend-email', async (req, res) => {
 });
 
 // -------------------------------------------------------------
+// API: Approve Order & Deliver Product (Admin Verification)
+// -------------------------------------------------------------
+app.post('/api/orders/:id/approve', verifyAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = db.getOrderById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const updated = db.updateOrderStatus(id, 'CONFIRMED');
+    const hostBaseUrl = `${req.protocol}://${req.get('host')}`;
+
+    // Send digital delivery email with product PDF
+    const emailResult = await sendOrderDeliveryEmail(updated, hostBaseUrl);
+    if (emailResult && emailResult.success) {
+      db.updateEmailStatus(id, 1, emailResult.previewUrl || '');
+    }
+
+    return res.json({
+      success: true,
+      message: `Order ${id} approved successfully! Delivery email sent to ${updated.email}.`,
+      order: updated,
+      emailSent: !!emailResult?.success,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// API: Reject / Flag Order (Admin Verification)
+// -------------------------------------------------------------
+app.post('/api/orders/:id/reject', verifyAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const updated = db.updateOrderStatus(id, 'FLAGGED');
+    return res.json({
+      success: true,
+      message: `Order ${id} rejected and flagged. Access remains blocked.`,
+      order: updated,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// -------------------------------------------------------------
 // API: Download Digital Product File
 // -------------------------------------------------------------
 app.get('/api/download/:token', (req, res) => {
@@ -556,6 +591,9 @@ app.get('/api/download/:token', (req, res) => {
     const order = db.getOrderByDownloadToken(token);
     if (!order) {
       return res.status(404).send('Invalid or expired download link. Please contact support.');
+    }
+    if (order.status !== 'CONFIRMED') {
+      return res.status(403).send('Your payment is currently pending verification. Download access is locked until approved by the administrator.');
     }
   }
 

@@ -614,6 +614,46 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
     }
   };
 
+  // Approve Order & Deliver Product
+  const handleApproveOrder = async (orderId: string, customerName: string) => {
+    if (!window.confirm(`Have you verified payment in your Google Pay app for "${customerName}"? Clicking OK will mark the order confirmed and automatically dispatch the guide and receipt to their email.`)) return;
+    try {
+      const res = await fetch(`/api/orders/${orderId}/approve`, {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Order approved & product delivered!');
+        fetchOrders();
+      } else {
+        showToast(data.message || 'Error approving order');
+      }
+    } catch (err) {
+      showToast('Error approving order');
+    }
+  };
+
+  // Reject / Flag Order
+  const handleRejectOrder = async (orderId: string, customerName: string) => {
+    if (!window.confirm(`Reject order ${orderId} for "${customerName}"? Access will remain blocked.`)) return;
+    try {
+      const res = await fetch(`/api/orders/${orderId}/reject`, {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Order marked as FLAGGED / Rejected');
+        fetchOrders();
+      } else {
+        showToast(data.message || 'Error rejecting order');
+      }
+    } catch (err) {
+      showToast('Error rejecting order');
+    }
+  };
+
   // Clear Test Orders (Quick Clean)
   const handleClearTestOrders = async () => {
     if (!window.confirm('Delete all test orders (Guru Gokul, Priya Builder, Rahul Sharma)? Your real orders will be kept.')) return;
@@ -1205,6 +1245,35 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                               </div>
                             </div>
                           </div>
+
+                          {/* Verification Banner: Check GPay and Approve or Reject */}
+                          {order.status === 'PENDING' && (
+                            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                                <span className="text-xs text-amber-200">
+                                  Verification required: Check your Google Pay app for <strong>₹{order.amount}</strong> with UTR <strong className="font-mono text-white">{order.utrNumber}</strong>.
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                                <button
+                                  onClick={() => handleApproveOrder(order.id, order.fullName)}
+                                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                                  title="Approve Order & Automatically Deliver Product"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Approve & Deliver</span>
+                                </button>
+                                <button
+                                  onClick={() => handleRejectOrder(order.id, order.fullName)}
+                                  className="px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white font-bold text-xs flex items-center gap-1 border border-rose-500/30 transition-all"
+                                  title="Reject order and block access"
+                                >
+                                  <span>Reject</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))
                   )}

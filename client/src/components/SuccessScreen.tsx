@@ -22,16 +22,20 @@ interface SuccessScreenProps {
     utrNumber: string;
     amount: number;
     createdAt: string;
-    downloadToken: string;
+    downloadToken?: string;
+    status?: string;
   };
   onClose: () => void;
 }
 
 export const SuccessScreen: React.FC<SuccessScreenProps> = ({ order, onClose }) => {
   const [copiedId, setCopiedId] = React.useState(false);
+  const isPending = order.status === 'PENDING' || !order.downloadToken;
 
   useEffect(() => {
-    // Fire celebratory confetti cannons
+    // Only fire confetti if payment is confirmed
+    if (isPending) return;
+
     const count = 200;
     const defaults = {
       origin: { y: 0.7 },
@@ -71,7 +75,7 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ order, onClose }) 
       spread: 120,
       startVelocity: 45,
     });
-  }, []);
+  }, [isPending]);
 
   const handleCopyOrderId = () => {
     navigator.clipboard.writeText(order.id);
@@ -79,58 +83,91 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ order, onClose }) 
     setTimeout(() => setCopiedId(false), 2000);
   };
 
-  const downloadLink = `/api/download/${order.downloadToken}`;
+  const downloadLink = order.downloadToken ? `/api/download/${order.downloadToken}` : '#';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-xl overflow-y-auto">
-      <div className="relative w-full max-w-xl my-8 rounded-3xl bg-[#0c0c14] border-2 border-emerald-500/40 p-6 sm:p-10 text-white shadow-2xl text-center">
+      <div className={`relative w-full max-w-xl my-8 rounded-3xl bg-[#0c0c14] border-2 ${isPending ? 'border-amber-500/40' : 'border-emerald-500/40'} p-6 sm:p-10 text-white shadow-2xl text-center`}>
         
-        {/* Animated Green Badge */}
-        <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto mb-6 shadow-glow">
-          <CheckCircle2 className="w-10 h-10 animate-bounce" />
-        </div>
+        {/* Animated Badge */}
+        {isPending ? (
+          <div className="w-20 h-20 rounded-full bg-amber-500/10 border-2 border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto mb-6 shadow-glow">
+            <ShieldCheck className="w-10 h-10 animate-pulse" />
+          </div>
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto mb-6 shadow-glow">
+            <CheckCircle2 className="w-10 h-10 animate-bounce" />
+          </div>
+        )}
 
-        <span className="px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-block mb-3">
-          PAYMENT VERIFIED & CONFIRMED
-        </span>
+        {isPending ? (
+          <span className="px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 inline-block mb-3">
+            PAYMENT SUBMITTED • VERIFICATION IN PROGRESS
+          </span>
+        ) : (
+          <span className="px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-block mb-3">
+            PAYMENT VERIFIED & CONFIRMED
+          </span>
+        )}
 
         <h2 className="text-2xl sm:text-3xl font-black text-white mb-2">
-          Welcome to {PRODUCT_CONFIG.brandName}!
+          {isPending ? 'Payment Details Recorded!' : `Welcome to ${PRODUCT_CONFIG.brandName}!`}
         </h2>
 
-        {/* Email Dispatched Confirmation */}
-        <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-5 my-6 text-left space-y-3">
-          <div className="flex items-center gap-3 text-emerald-400">
-            <Mail className="w-5 h-5 shrink-0" />
-            <h4 className="text-sm font-bold text-white">
-              Product Sent to Your Inbox!
-            </h4>
+        {isPending ? (
+          /* Pending Verification Explanation Box */
+          <div className="rounded-2xl bg-amber-950/20 border border-amber-500/20 p-5 my-6 text-left space-y-3">
+            <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+              <ShieldCheck className="w-5 h-5 shrink-0" />
+              <span>Verifying With Bank Records</span>
+            </div>
+            <p className="text-xs text-zinc-300 leading-relaxed">
+              We have recorded your 12-digit UTR. Because direct UPI transactions are verified against bank records to ensure the exact amount of <strong>{PRODUCT_CONFIG.currencySymbol}{order.amount}</strong> was received, your digital guide will be automatically dispatched to:
+            </p>
+            <div className="px-3.5 py-2 rounded-xl bg-[#141420] border border-white/5 font-mono text-sm text-[#8c7dff] font-bold break-all">
+              {order.email}
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              ⏱️ Verification usually completes in <strong>5–15 minutes</strong>. If you need priority instant clearance, please message us on WhatsApp with your UTR.
+            </p>
           </div>
-          <p className="text-xs text-zinc-300 leading-relaxed">
-            We have dispatched the complete digital access link and receipt to:
-          </p>
-          <div className="px-3.5 py-2 rounded-xl bg-[#141420] border border-white/5 font-mono text-sm text-[#8c7dff] font-bold break-all">
-            {order.email}
+        ) : (
+          /* Confirmed: Email Dispatched Box */
+          <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-5 my-6 text-left space-y-3">
+            <div className="flex items-center gap-3 text-emerald-400">
+              <Mail className="w-5 h-5 shrink-0" />
+              <h4 className="text-sm font-bold text-white">
+                Product Sent to Your Inbox!
+              </h4>
+            </div>
+            <p className="text-xs text-zinc-300 leading-relaxed">
+              We have dispatched the complete digital access link and receipt to:
+            </p>
+            <div className="px-3.5 py-2 rounded-xl bg-[#141420] border border-white/5 font-mono text-sm text-[#8c7dff] font-bold break-all">
+              {order.email}
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Please check your Inbox (or Promotions/Spam tab if not visible immediately).
+            </p>
           </div>
-          <p className="text-[11px] text-zinc-400">
-            Please check your Inbox (or Promotions/Spam tab if not visible immediately).
-          </p>
-        </div>
+        )}
 
-        {/* Instant Backup Direct Download Button */}
-        <div className="space-y-3 mb-6">
-          <a
-            href={downloadLink}
-            download={PRODUCT_CONFIG.digitalProductFileName}
-            className="w-full py-4 rounded-full text-sm font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-500 transition-all duration-200 shadow-glow flex items-center justify-center gap-2 active:scale-95"
-          >
-            <Download className="w-5 h-5" />
-            <span>Instant Direct Download ({PRODUCT_CONFIG.digitalProductFileName})</span>
-          </a>
-          <span className="text-[11px] font-mono text-zinc-400 block">
-            ⚡ Instant backup download link enabled for your session
-          </span>
-        </div>
+        {/* Instant Backup Direct Download Button (ONLY when confirmed) */}
+        {!isPending && order.downloadToken && (
+          <div className="space-y-3 mb-6">
+            <a
+              href={downloadLink}
+              download={PRODUCT_CONFIG.digitalProductFileName}
+              className="w-full py-4 rounded-full text-sm font-bold uppercase tracking-wider text-white bg-emerald-600 hover:bg-emerald-500 transition-all duration-200 shadow-glow flex items-center justify-center gap-2 active:scale-95"
+            >
+              <Download className="w-5 h-5" />
+              <span>Instant Direct Download ({PRODUCT_CONFIG.digitalProductFileName})</span>
+            </a>
+            <span className="text-[11px] font-mono text-zinc-400 block">
+              ⚡ Instant backup download link enabled for your session
+            </span>
+          </div>
+        )}
 
         {/* Order Details Receipt Box */}
         <div className="rounded-xl bg-[#08080c] border border-white/5 p-4 text-xs font-mono text-left space-y-2 mb-6">
