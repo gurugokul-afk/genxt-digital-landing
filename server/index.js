@@ -19,40 +19,83 @@ if (!fs.existsSync(config.DOWNLOADS_DIR)) {
 }
 
 // Admin Auth Helper (Token based)
-const ADMIN_TOKEN = crypto.createHash('sha256').update(config.ADMIN_EMAIL + '-genxt2026').digest('hex');
+let currentAdminToken = crypto.createHash('sha256').update(Date.now() + '-genxt-session').digest('hex');
 
 function verifyAdmin(req, res, next) {
   const token = req.headers['x-admin-token'] || req.query.token;
-  if (token === ADMIN_TOKEN) {
+  if (token && token === currentAdminToken) {
     return next();
   }
   return res.status(401).json({ success: false, message: 'Unauthorized. Admin access required.' });
 }
 
 // -------------------------------------------------------------
-// API: Admin Login
+// API: Admin Login (Dynamic Credentials from SQLite)
 // -------------------------------------------------------------
 app.post('/api/admin/login', (req, res) => {
   const { email, password } = req.body;
   const cleanEmail = (email || '').trim().toLowerCase();
   const cleanPass = (password || '').trim();
 
+  const currentSettings = db.getAdminSettings();
+
   if (
-    cleanEmail === config.ADMIN_EMAIL.toLowerCase() &&
-    (cleanPass === 'genxt2026' || cleanPass === 'admin123' || cleanPass === 'admin')
+    cleanEmail === currentSettings.email.toLowerCase() &&
+    cleanPass === currentSettings.password
   ) {
+    // Generate fresh session token
+    currentAdminToken = crypto.createHash('sha256').update(Date.now() + '-genxt-' + cleanEmail).digest('hex');
     return res.json({
       success: true,
       message: 'Admin authentication successful',
-      token: ADMIN_TOKEN,
-      adminEmail: config.ADMIN_EMAIL,
+      token: currentAdminToken,
+      adminEmail: currentSettings.email,
     });
   }
 
   return res.status(401).json({
     success: false,
-    message: 'Invalid admin email or password. Use your admin email and password "genxt2026".',
+    message: 'Invalid admin email or password.',
   });
+});
+
+// -------------------------------------------------------------
+// API: Admin Change Credentials (Update Email & Password)
+// -------------------------------------------------------------
+app.post('/api/admin/change-credentials', verifyAdmin, (req, res) => {
+  try {
+    const { currentPassword, newEmail, newPassword } = req.body;
+    const settings = db.getAdminSettings();
+
+    if (!currentPassword || currentPassword.trim() !== settings.password) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    }
+
+    if (!newEmail && !newPassword) {
+      return res.status(400).json({ success: false, message: 'Please provide a new email or password.' });
+    }
+
+    if (newPassword && newPassword.trim().length < 4) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 4 characters.' });
+    }
+
+    const updated = db.updateAdminSettings(
+      newEmail ? newEmail.trim().toLowerCase() : null,
+      newPassword ? newPassword.trim() : null
+    );
+
+    // Refresh session token
+    currentAdminToken = crypto.createHash('sha256').update(Date.now() + '-genxt-' + updated.email).digest('hex');
+
+    return res.json({
+      success: true,
+      message: 'Admin email and password updated successfully!',
+      token: currentAdminToken,
+      adminEmail: updated.email,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 // -------------------------------------------------------------

@@ -39,6 +39,23 @@ db.exec(`
   )
 `);
 
+// 3. Initialize Admin Settings table (for dynamic Email & Password updates)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS admin_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )
+`);
+
+// Seed default settings if empty
+const settingsCountStmt = db.prepare(`SELECT COUNT(*) as count FROM admin_settings`);
+if (settingsCountStmt.get().count === 0) {
+  const insertSetting = db.prepare(`INSERT INTO admin_settings (key, value) VALUES (?, ?)`);
+  insertSetting.run('admin_email', config.ADMIN_EMAIL);
+  insertSetting.run('admin_password', 'genxt2026');
+  console.log('[Database] Seeded initial admin credentials');
+}
+
 // Seed default product if empty
 const countStmt = db.prepare('SELECT COUNT(*) as count FROM products');
 const productCount = countStmt.get().count;
@@ -228,7 +245,6 @@ const dbService = {
   deleteProduct: (id) => {
     const stmt = db.prepare(`DELETE FROM products WHERE id = ?`);
     stmt.run(id);
-    // If deleted product was active, activate the most recent product
     const active = dbService.getActiveProduct();
     if (!active) {
       const remaining = dbService.getAllProducts();
@@ -244,6 +260,38 @@ const dbService = {
     const stmt = db.prepare(`UPDATE products SET isActive = 1 WHERE id = ?`);
     stmt.run(id);
     return dbService.getActiveProduct();
+  },
+
+  // Admin Credentials Management
+  getAdminSettings: () => {
+    const emailStmt = db.prepare(`SELECT value FROM admin_settings WHERE key = 'admin_email'`);
+    const passStmt = db.prepare(`SELECT value FROM admin_settings WHERE key = 'admin_password'`);
+    const emailRow = emailStmt.get();
+    const passRow = passStmt.get();
+    return {
+      email: emailRow ? emailRow.value : config.ADMIN_EMAIL,
+      password: passRow ? passRow.value : 'genxt2026',
+    };
+  },
+
+  updateAdminSettings: (newEmail, newPassword) => {
+    if (newEmail) {
+      const stmt = db.prepare(`
+        INSERT INTO admin_settings (key, value)
+        VALUES ('admin_email', ?)
+        ON CONFLICT(key) DO UPDATE SET value = ?
+      `);
+      stmt.run(newEmail, newEmail);
+    }
+    if (newPassword) {
+      const stmt = db.prepare(`
+        INSERT INTO admin_settings (key, value)
+        VALUES ('admin_password', ?)
+        ON CONFLICT(key) DO UPDATE SET value = ?
+      `);
+      stmt.run(newPassword, newPassword);
+    }
+    return dbService.getAdminSettings();
   }
 };
 

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   X,
-  RefreshCw,
   Download,
   Mail,
   CheckCircle2,
@@ -15,7 +14,8 @@ import {
   Lock,
   Layers,
   ShoppingBag,
-  ExternalLink
+  ExternalLink,
+  KeyRound
 } from 'lucide-react';
 import { PRODUCT_CONFIG } from '../config/productConfig';
 
@@ -54,16 +54,25 @@ interface ProductItem {
 }
 
 export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onProductChanged }) => {
-  // Auth state
+  // Auth state - completely empty, no pre-filled text or examples
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string>('');
-  const [loginEmail, setLoginEmail] = useState('suvarnalathasivaramakrishnan@gmail.com');
+  const [adminEmailDisplay, setAdminEmailDisplay] = useState<string>('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Active Tab: 'orders' | 'products'
-  const [activeTab, setActiveTab] = useState<'orders' | 'products'>('products');
+  // Active Tab: 'products' | 'orders' | 'security'
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'security'>('products');
+
+  // Change credentials form state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [isUpdatingCreds, setIsUpdatingCreds] = useState(false);
+  const [credMessage, setCredMessage] = useState('');
+  const [credError, setCredError] = useState('');
 
   // Orders state
   const [orders, setOrders] = useState<OrderRecord[]>([]);
@@ -78,7 +87,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
 
-  // Form fields for create/edit
+  // Form fields for create/edit product
   const [formData, setFormData] = useState({
     name: '',
     headline: '',
@@ -93,9 +102,11 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
   // Check saved session
   useEffect(() => {
     const savedToken = localStorage.getItem('genxt_admin_token');
+    const savedEmail = localStorage.getItem('genxt_admin_email');
     if (savedToken) {
       setAdminToken(savedToken);
       setIsAdminAuthenticated(true);
+      if (savedEmail) setAdminEmailDisplay(savedEmail);
     }
   }, []);
 
@@ -126,15 +137,21 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Login failed');
+        throw new Error(data.message || 'Invalid admin email or password.');
       }
 
       setAdminToken(data.token);
+      setAdminEmailDisplay(data.adminEmail || loginEmail);
       setIsAdminAuthenticated(true);
       localStorage.setItem('genxt_admin_token', data.token);
-      showToast('Admin session unlocked!');
+      localStorage.setItem('genxt_admin_email', data.adminEmail || loginEmail);
+      
+      // Clear input fields
+      setLoginEmail('');
+      setLoginPassword('');
+      showToast('Welcome Admin!');
     } catch (err: any) {
-      setLoginError(err.message || 'Invalid credentials');
+      setLoginError(err.message || 'Invalid admin credentials.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -142,8 +159,55 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
 
   const handleLogout = () => {
     localStorage.removeItem('genxt_admin_token');
+    localStorage.removeItem('genxt_admin_email');
     setAdminToken('');
+    setAdminEmailDisplay('');
     setIsAdminAuthenticated(false);
+  };
+
+  // Handle changing admin email and password
+  const handleChangeCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingCreds(true);
+    setCredMessage('');
+    setCredError('');
+
+    try {
+      const res = await fetch('/api/admin/change-credentials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newEmail: newAdminEmail.trim() || undefined,
+          newPassword: newAdminPassword.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to update credentials.');
+      }
+
+      setAdminToken(data.token);
+      localStorage.setItem('genxt_admin_token', data.token);
+      if (data.adminEmail) {
+        setAdminEmailDisplay(data.adminEmail);
+        localStorage.setItem('genxt_admin_email', data.adminEmail);
+      }
+
+      setCredMessage('Credentials updated successfully!');
+      setCurrentPassword('');
+      setNewAdminEmail('');
+      setNewAdminPassword('');
+      showToast('Admin email and password updated!');
+    } catch (err: any) {
+      setCredError(err.message || 'Error updating credentials.');
+    } finally {
+      setIsUpdatingCreds(false);
+    }
   };
 
   const fetchOrders = async () => {
@@ -197,14 +261,14 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
     setEditingProduct(null);
     setIsCreatingNew(true);
     setFormData({
-      name: 'NEW DIGITAL GUIDE',
-      headline: 'BUILD A DIGITAL ASSET',
-      question: 'Ready to build your next income stream?',
-      description: 'Step-by-step digital guide to create and sell digital products.',
+      name: '',
+      headline: '',
+      question: '',
+      description: '',
       price: 499,
       coverImage: '/images/product_cover.jpg',
       fileName: 'Build_A_Side_Hustle_Before_Graduation_GENXT.pdf',
-      whatsIncludedText: 'Comprehensive digital guide\nWorksheets and checklists\nInstant delivery & download',
+      whatsIncludedText: '',
     });
   };
 
@@ -367,7 +431,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/85 backdrop-blur-sm">
       <div className="w-full max-w-4xl h-full bg-[#09090e] border-l border-white/10 flex flex-col text-white shadow-2xl">
         
         {/* Top Header */}
@@ -378,9 +442,11 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
             </div>
             <div>
               <h3 className="text-lg font-black">GENXT Admin Workspace</h3>
-              <p className="text-xs text-zinc-400 font-mono">
-                Admin: {PRODUCT_CONFIG.adminEmail}
-              </p>
+              {isAdminAuthenticated && adminEmailDisplay && (
+                <p className="text-xs text-zinc-400 font-mono">
+                  Signed in: {adminEmailDisplay}
+                </p>
+              )}
             </div>
           </div>
 
@@ -390,7 +456,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                 onClick={handleLogout}
                 className="text-xs text-zinc-400 hover:text-rose-400 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
               >
-                Lock Session
+                Log Out
               </button>
             )}
             <button
@@ -411,7 +477,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
 
         {/* Content */}
         {!isAdminAuthenticated ? (
-          /* ================= ADMIN LOGIN SCREEN ================= */
+          /* ================= CLEAN ADMIN LOGIN SCREEN (NO EXAMPLES, NO HINTS) ================= */
           <div className="flex-1 flex items-center justify-center p-6">
             <div className="w-full max-w-md rounded-3xl bg-[#0e0e16] border border-white/10 p-8 text-center space-y-6 shadow-xl">
               <div className="w-14 h-14 rounded-2xl bg-purple-500/10 text-[#8c7dff] flex items-center justify-center mx-auto">
@@ -419,41 +485,39 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
               </div>
 
               <div>
-                <h3 className="text-xl font-bold text-white">Admin Authentication</h3>
+                <h3 className="text-xl font-bold text-white">Admin Login</h3>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Log in with your official admin email address to manage products & view customer purchases.
+                  Enter your admin credentials to access product management & customer orders.
                 </p>
               </div>
 
               <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
                 <div>
-                  <label className="block text-xs font-mono text-zinc-300 uppercase mb-1">
-                    Admin Email Address
+                  <label className="block text-xs font-mono text-zinc-300 uppercase mb-1.5">
+                    Admin Email
                   </label>
                   <input
                     type="email"
                     required
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="Enter admin email"
                     className="w-full px-4 py-3 rounded-xl bg-[#14141f] border border-white/10 text-white text-xs font-mono focus:border-[#6452f6] outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-mono text-zinc-300 uppercase mb-1">
-                    Password / Access Code
+                  <label className="block text-xs font-mono text-zinc-300 uppercase mb-1.5">
+                    Password
                   </label>
                   <input
                     type="password"
                     required
-                    placeholder="Enter password (default: genxt2026)"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="Enter password"
                     className="w-full px-4 py-3 rounded-xl bg-[#14141f] border border-white/10 text-white text-xs focus:border-[#6452f6] outline-none"
                   />
-                  <span className="text-[10px] text-zinc-500 font-mono mt-1 block">
-                    Default master key: <code className="text-purple-300">genxt2026</code>
-                  </span>
                 </div>
 
                 {loginError && (
@@ -465,7 +529,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                   disabled={isLoggingIn}
                   className="w-full py-3.5 rounded-full text-xs font-bold uppercase tracking-wider text-white bg-[#6452f6] hover:bg-[#5240eb] shadow-glow transition-all"
                 >
-                  {isLoggingIn ? 'Authenticating...' : 'Unlock Admin Dashboard'}
+                  {isLoggingIn ? 'Logging in...' : 'Sign In'}
                 </button>
               </form>
             </div>
@@ -485,7 +549,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                   }`}
                 >
                   <ShoppingBag className="w-4 h-4 text-[#8c7dff]" />
-                  <span>Product Manager (CRUD)</span>
+                  <span>Products</span>
                   <span className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 text-zinc-300">
                     {products.length}
                   </span>
@@ -500,22 +564,35 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                   }`}
                 >
                   <Layers className="w-4 h-4 text-emerald-400" />
-                  <span>Customer Purchases (SQLite)</span>
+                  <span>Customer Orders</span>
                   <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300">
                     {orders.length}
                   </span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('security')}
+                  className={`py-3.5 border-b-2 font-bold flex items-center gap-2 ${
+                    activeTab === 'security'
+                      ? 'border-[#6452f6] text-white'
+                      : 'border-transparent text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  <span>Security & Password</span>
+                </button>
               </div>
 
-              {activeTab === 'products' ? (
+              {activeTab === 'products' && (
                 <button
                   onClick={startCreating}
                   className="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#6452f6] hover:bg-[#5240eb] text-white flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add New Product</span>
+                  <span>Add Product</span>
                 </button>
-              ) : (
+              )}
+              {activeTab === 'orders' && (
                 <button
                   onClick={handleExportCsv}
                   className="px-3 py-1.5 rounded-lg text-xs font-mono bg-white/10 hover:bg-white/15 text-zinc-200 flex items-center gap-1.5"
@@ -551,7 +628,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                     <form onSubmit={handleSaveProduct} className="space-y-4 text-xs">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-zinc-400 font-mono mb-1">Product Title / Name</label>
+                          <label className="block text-zinc-400 font-mono mb-1">Product Title</label>
                           <input
                             type="text"
                             required
@@ -562,7 +639,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                         </div>
 
                         <div>
-                          <label className="block text-zinc-400 font-mono mb-1">Actual Selling Price (INR)</label>
+                          <label className="block text-zinc-400 font-mono mb-1">Selling Price (INR)</label>
                           <input
                             type="number"
                             required
@@ -575,7 +652,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-zinc-400 font-mono mb-1">Cover Image URL / Path</label>
+                          <label className="block text-zinc-400 font-mono mb-1">Cover Image Path / URL</label>
                           <input
                             type="text"
                             required
@@ -743,7 +820,7 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                       type="text"
                       value={orderSearch}
                       onChange={(e) => setOrderSearch(e.target.value)}
-                      placeholder="Search customer purchases by name, email, UTR, or Order ID..."
+                      placeholder="Search customer purchases..."
                       className="w-full pl-9 pr-4 py-2 rounded-xl bg-[#111119] border border-white/10 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#6452f6]"
                     />
                   </div>
@@ -838,6 +915,86 @@ export const AdminDrawer: React.FC<AdminDrawerProps> = ({ isOpen, onClose, onPro
                         </div>
                       ))
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Security & Credentials Update */}
+            {activeTab === 'security' && (
+              <div className="flex-1 overflow-y-auto p-6 flex items-center justify-center">
+                <div className="w-full max-w-md rounded-2xl bg-[#0c0c14] border border-white/10 p-6 space-y-5">
+                  <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                      <KeyRound className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Update Admin Email & Password</h4>
+                      <p className="text-[11px] text-zinc-400">
+                        Change your login email or master password anytime.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleChangeCredentials} className="space-y-4 text-xs">
+                    <div>
+                      <label className="block text-zinc-300 font-mono mb-1.5">
+                        Current Password <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="Enter current password to verify"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white focus:border-[#6452f6] outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-zinc-300 font-mono mb-1.5">
+                        New Admin Email (Optional)
+                      </label>
+                      <input
+                        type="email"
+                        value={newAdminEmail}
+                        onChange={(e) => setNewAdminEmail(e.target.value)}
+                        placeholder="Leave blank to keep existing email"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white font-mono focus:border-[#6452f6] outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-zinc-300 font-mono mb-1.5">
+                        New Password (Optional)
+                      </label>
+                      <input
+                        type="password"
+                        value={newAdminPassword}
+                        onChange={(e) => setNewAdminPassword(e.target.value)}
+                        placeholder="Leave blank to keep existing password"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#14141f] border border-white/10 text-white focus:border-[#6452f6] outline-none"
+                      />
+                    </div>
+
+                    {credMessage && (
+                      <p className="text-xs text-emerald-400 font-medium">{credMessage}</p>
+                    )}
+                    {credError && (
+                      <p className="text-xs text-rose-400 font-medium">{credError}</p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isUpdatingCreds || !currentPassword}
+                      className={`w-full py-3 rounded-full font-bold uppercase tracking-wider text-white shadow-glow transition-all ${
+                        isUpdatingCreds || !currentPassword
+                          ? 'bg-zinc-700/50 cursor-not-allowed opacity-60'
+                          : 'bg-[#6452f6] hover:bg-[#5240eb] active:scale-95'
+                      }`}
+                    >
+                      {isUpdatingCreds ? 'Updating...' : 'Save New Credentials'}
+                    </button>
+                  </form>
                 </div>
               </div>
             )}
