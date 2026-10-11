@@ -102,6 +102,7 @@ export function App() {
         isOpen={isCheckoutOpen}
         onClose={handleCloseCheckout}
         onSuccess={handleOrderSuccess}
+        product={activeProduct}
       />
 
       {/* Order Success Screen (Confetti Fireworks & Backup Direct Download) */}
@@ -127,19 +128,16 @@ export function App() {
 
       {/* Mobile Floating Action Button */}
       <div className="fixed bottom-4 left-4 right-4 z-30 sm:hidden">
-        <button
-          onClick={handleOpenCheckout}
+        <a
+          href="#product"
           className="w-full py-4 px-6 rounded-full font-black text-sm uppercase tracking-wider text-white bg-[#6452f6] shadow-glow flex items-center justify-between active:scale-95"
         >
           <div className="flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-purple-300" />
-            <span>{PRODUCT_CONFIG.heroButtonText}</span>
+            <span>Buy Now</span>
           </div>
-          <div className="flex items-center gap-1.5 font-bold">
-            <span>{PRODUCT_CONFIG.currencySymbol}{currentPrice}</span>
-            <ArrowRight className="w-4 h-4" />
-          </div>
-        </button>
+          <ArrowRight className="w-4 h-4" />
+        </a>
       </div>
     </div>
   );

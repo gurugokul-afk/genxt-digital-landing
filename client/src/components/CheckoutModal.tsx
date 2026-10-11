@@ -19,9 +19,19 @@ interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (orderData: any) => void;
+  product?: {
+    id?: string;
+    name?: string;
+    price?: number;
+    description?: string;
+    coverImage?: string;
+  } | null;
 }
 
-export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onSuccess, product }) => {
+  const productName = product?.name || PRODUCT_CONFIG.productName;
+  const price = product?.price !== undefined ? product.price : PRODUCT_CONFIG.actualPrice;
+
   const [step, setStep] = useState<1 | 2>(1);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -70,7 +80,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   // UPI payment intent URI
   const effectiveUpiUri = paymentConfig.upiUri || `upi://pay?pa=${encodeURIComponent(paymentConfig.upiId)}&pn=${encodeURIComponent(
     paymentConfig.merchantName
-  )}&am=${encodeURIComponent(PRODUCT_CONFIG.actualPrice.toString())}&cu=INR&tn=${encodeURIComponent(
+  )}&am=${encodeURIComponent(price.toString())}&cu=INR&tn=${encodeURIComponent(
     PRODUCT_CONFIG.paymentNote
   )}`;
 
@@ -122,8 +132,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
           email: email.trim().toLowerCase(),
           phone: phone.trim(),
           utrNumber: cleanUtr,
-          amount: PRODUCT_CONFIG.actualPrice,
-          productTitle: PRODUCT_CONFIG.productName,
+          amount: price,
+          productTitle: productName,
         }),
       });
 
@@ -207,7 +217,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                 {/* Product Summary Mini Card */}
                 <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4 flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-white">{PRODUCT_CONFIG.productName}</h4>
+                    <h4 className="text-sm font-bold text-white">{productName}</h4>
                     <span className="text-xs text-purple-400 font-mono">
                       Personal Use License
                     </span>
@@ -215,7 +225,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                   <div className="text-right">
                     <span className="text-xs text-zinc-500 font-mono block">Price</span>
                     <span className="text-xl font-black text-white">
-                      {PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice}
+                      {PRODUCT_CONFIG.currencySymbol}{price}
                     </span>
                   </div>
                 </div>
@@ -315,7 +325,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                     type="submit"
                     className="w-full py-4 rounded-full text-sm font-bold uppercase tracking-wider text-white bg-[#6452f6] hover:bg-[#5240eb] shadow-glow transition-all active:scale-95 flex items-center justify-center gap-2 group"
                   >
-                    <span>Proceed to UPI Payment ({PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice})</span>
+                    <span>Proceed to UPI Payment ({PRODUCT_CONFIG.currencySymbol}{price})</span>
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </div>
@@ -337,7 +347,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                 <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-[#08080d] border border-white/10 relative">
                   <div className="flex items-center justify-between w-full mb-3 text-xs font-mono">
                     <span className="text-zinc-400 font-semibold">MERCHANT: {paymentConfig.merchantName}</span>
-                    <span className="text-emerald-400 font-bold">AMOUNT: {PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice}</span>
+                    <span className="text-emerald-400 font-bold">AMOUNT: {PRODUCT_CONFIG.currencySymbol}{price}</span>
                   </div>
 
                   {/* Real QR Code Image Display */}
@@ -373,7 +383,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                     <span className="w-4 h-4 rounded-full bg-[#6452f6]/30 text-[#8c7dff] font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
                       1
                     </span>
-                    <span>Scan the QR code and pay {PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice}.</span>
+                    <span>Scan the QR code and pay {PRODUCT_CONFIG.currencySymbol}{price}.</span>
                   </div>
                   <div className="flex items-start gap-2.5">
                     <span className="w-4 h-4 rounded-full bg-[#6452f6]/30 text-[#8c7dff] font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">

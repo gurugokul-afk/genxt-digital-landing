@@ -45,15 +45,12 @@ export const MainHero: React.FC<MainHeroProps> = ({ onOpenCheckout }) => {
         </div>
 
         {/* Buy Now CTA (Navigates directly to dedicated Product Section) */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+        <div className="flex items-center justify-center mb-12">
           <a
             href="#product"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-9 py-4 rounded-full text-base font-bold text-white bg-[#6452f6] hover:bg-[#5240eb] transition-all duration-200 shadow-glow hover:shadow-glow-lg active:scale-95 group"
+            className="inline-flex items-center justify-center gap-2.5 px-9 py-4 rounded-full text-base font-bold text-white bg-[#6452f6] hover:bg-[#5240eb] transition-all duration-200 shadow-glow hover:shadow-glow-lg active:scale-95 group"
           >
             <span>Buy Now</span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs bg-white/20 font-semibold">
-              {PRODUCT_CONFIG.currencySymbol}{PRODUCT_CONFIG.actualPrice}
-            </span>
             <ArrowDown className="w-5 h-5 group-hover:translate-y-1 transition-transform" />
           </a>
         </div>
